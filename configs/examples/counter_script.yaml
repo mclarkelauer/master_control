@@ -1,0 +1,8 @@
+name: report_generator
+type: script
+run_mode: n_times
+max_runs: 3
+module: agents.examples.counter_script
+entry_point: run
+params:
+  output_dir: "/tmp/reports"
