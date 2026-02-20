@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Runtime artifacts
+logs/
+run/
+*.db
+
+# Deployment inventory (may contain real hostnames/keys)
+inventory.yaml

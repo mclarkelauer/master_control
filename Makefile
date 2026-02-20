@@ -1,4 +1,5 @@
-.PHONY: install start stop restart status logs test lint validate clean help
+.PHONY: install start stop restart status logs test lint validate clean help \
+       setup setup-local deploy deploy-client deploy-dry-run deploy-sync
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -34,3 +35,23 @@ validate: ## Validate workload config files
 clean: ## Remove runtime artifacts (logs, db, pid, socket)
 	rm -rf logs/ run/ master_control.db /tmp/master_control.sock
 	@echo "Cleaned runtime artifacts"
+
+# --- Deployment ---
+
+setup: ## Set up control host and deploy to clients
+	@bash scripts/setup-control-host.sh
+
+setup-local: ## Set up control host only (no client deployment)
+	@bash scripts/setup-control-host.sh --local-only
+
+deploy: ## Deploy to all clients in inventory
+	@bash scripts/deploy-clients.sh
+
+deploy-client: ## Deploy to a specific client: make deploy-client CLIENT=name
+	@bash scripts/deploy-clients.sh --client $(CLIENT)
+
+deploy-dry-run: ## Show what deployment would do without doing it
+	@bash scripts/deploy-clients.sh --dry-run
+
+deploy-sync: ## Sync files and configs to clients without restarting
+	@bash scripts/deploy-clients.sh --sync-only
