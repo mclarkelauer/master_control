@@ -1,0 +1,11 @@
+name: web_watcher
+type: service
+run_mode: forever
+module: agents.examples.ticker_service
+entry_point: run
+restart_delay: 10
+params:
+  watch_url: "https://example.com"
+  interval: 30
+tags:
+  - monitoring

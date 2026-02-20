@@ -1,0 +1,4 @@
+name: broken_agent
+type: agent
+run_mode: schedule
+module: agents.examples.hello_agent

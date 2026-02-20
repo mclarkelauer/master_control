@@ -1,0 +1,11 @@
+workloads:
+  - name: agent_a
+    type: agent
+    run_mode: schedule
+    schedule: "0 * * * *"
+    module: agents.my_agents.agent_a
+  - name: agent_b
+    type: script
+    run_mode: n_times
+    max_runs: 1
+    module: agents.my_agents.agent_b

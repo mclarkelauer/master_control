@@ -1,0 +1,13 @@
+name: data_collector
+type: agent
+run_mode: schedule
+schedule: "*/5 * * * *"
+module: agents.examples.hello_agent
+entry_point: run
+params:
+  source_url: "https://api.example.com/data"
+  batch_size: 100
+timeout: 300
+tags:
+  - data
+  - collection

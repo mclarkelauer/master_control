@@ -1,0 +1,3 @@
+type: agent
+run_mode: forever
+module: agents.examples.hello_agent
