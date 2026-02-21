@@ -1,8 +1,41 @@
+from __future__ import annotations
+
 from typing import Any, Literal
 
 from pydantic import BaseModel, model_validator
 
 from master_control.models.workload import RunMode, WorkloadSpec, WorkloadType
+
+
+class FleetConfig(BaseModel):
+    """Fleet communication settings for client daemons. All optional."""
+
+    enabled: bool = False
+    client_name: str | None = None
+    api_host: str = "0.0.0.0"
+    api_port: int = 9100
+    central_api_url: str | None = None
+    heartbeat_interval_seconds: float = 30.0
+    api_token: str | None = None
+
+
+class CentralConfig(BaseModel):
+    """Central API server settings (control host only)."""
+
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8080
+    db_path: str = "./fleet.db"
+    inventory_path: str = "./inventory.yaml"
+    api_token: str | None = None
+    stale_threshold_seconds: float = 90.0
+
+
+class DaemonConfig(BaseModel):
+    """Top-level daemon configuration loaded from daemon.yaml."""
+
+    fleet: FleetConfig = FleetConfig()
+    central: CentralConfig = CentralConfig()
 
 
 class WorkloadConfig(BaseModel):

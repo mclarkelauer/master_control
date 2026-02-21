@@ -43,6 +43,7 @@ def cli(ctx: click.Context, config_dir: str, db_path: str, socket_path: str) -> 
 @click.pass_context
 def up(ctx: click.Context) -> None:
     """Start the orchestrator daemon (foreground)."""
+    from master_control.config.loader import ConfigLoader
     from master_control.engine.orchestrator import Orchestrator
 
     config_dir = Path(ctx.obj["config_dir"])
@@ -50,11 +51,16 @@ def up(ctx: click.Context) -> None:
     socket_path = Path(ctx.obj["socket_path"])
     log_dir = Path("./logs")
 
+    # Load daemon config for fleet/central settings
+    loader = ConfigLoader(config_dir)
+    daemon_config = loader.load_daemon_config()
+
     orch = Orchestrator(
         config_dir=config_dir,
         db_path=db_path,
         log_dir=log_dir,
         socket_path=socket_path,
+        daemon_config=daemon_config,
     )
 
     async def run_daemon() -> None:

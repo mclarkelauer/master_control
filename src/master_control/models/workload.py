@@ -55,3 +55,17 @@ class WorkloadState:
     last_stopped: datetime | None = None
     last_heartbeat: datetime | None = None
     last_error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a dict suitable for JSON/API responses."""
+        return {
+            "name": self.spec.name,
+            "type": self.spec.workload_type.value,
+            "run_mode": self.spec.run_mode.value,
+            "status": self.status.value,
+            "pid": self.pid,
+            "run_count": self.run_count,
+            "last_started": self.last_started.isoformat() if self.last_started else None,
+            "last_stopped": self.last_stopped.isoformat() if self.last_stopped else None,
+            "last_error": self.last_error,
+        }

@@ -30,11 +30,13 @@ class Orchestrator:
         db_path: Path,
         log_dir: Path | None = None,
         socket_path: Path | None = None,
+        daemon_config: object | None = None,
     ) -> None:
         self.config_dir = config_dir
         self.db_path = db_path
         self.log_dir = log_dir
         self.socket_path = socket_path or Path("/tmp/master_control.sock")
+        self._daemon_config = daemon_config
         self._registry = WorkloadRegistry()
         self._db: Database | None = None
         self._run_history: RunHistoryRepo | None = None
@@ -43,6 +45,9 @@ class Orchestrator:
         self._runners: dict[str, WorkloadRunner] = {}
         self._health_checker = HealthChecker(self)
         self._ipc_server: asyncio.Server | None = None
+        self._http_server = None
+        self._http_task: asyncio.Task | None = None
+        self._heartbeat = None
 
     @property
     def registry(self) -> WorkloadRegistry:
@@ -79,11 +84,17 @@ class Orchestrator:
         # Start IPC server
         await self._start_ipc_server()
 
+        # Start fleet HTTP API and heartbeat if configured
+        await self._start_fleet_services()
+
         log.info("orchestrator ready")
 
     async def shutdown(self) -> None:
-        """Graceful shutdown: stop all runners, scheduler, IPC, DB."""
+        """Graceful shutdown: stop all runners, scheduler, IPC, fleet services, DB."""
         log.info("orchestrator shutting down")
+
+        # Stop fleet services
+        await self._stop_fleet_services()
 
         # Stop IPC server
         if self._ipc_server:
@@ -188,6 +199,66 @@ class Orchestrator:
         runner = WorkloadRunner(spec, self._run_history, self.log_dir)
         self._runners[name] = runner
         await runner.start()
+
+    # --- Fleet HTTP API & Heartbeat ---
+
+    async def _start_fleet_services(self) -> None:
+        """Start the client HTTP API and heartbeat reporter if fleet is enabled."""
+        if not self._daemon_config:
+            return
+
+        fleet_config = getattr(self._daemon_config, "fleet", None)
+        if not fleet_config or not fleet_config.enabled:
+            return
+
+        try:
+            import uvicorn
+
+            from master_control.api.client_app import create_client_app
+
+            app = create_client_app(self, fleet_config.api_token)
+            config = uvicorn.Config(
+                app,
+                host=fleet_config.api_host,
+                port=fleet_config.api_port,
+                log_level="warning",
+            )
+            self._http_server = uvicorn.Server(config)
+            self._http_task = asyncio.create_task(self._http_server.serve())
+            log.info(
+                "fleet http api started",
+                host=fleet_config.api_host,
+                port=fleet_config.api_port,
+            )
+        except ImportError:
+            log.warning("fleet http api requires 'fastapi' and 'uvicorn' — skipping")
+            return
+
+        # Start heartbeat reporter if central_api_url is set
+        if fleet_config.central_api_url:
+            try:
+                from master_control.fleet.heartbeat import HeartbeatReporter
+
+                self._heartbeat = HeartbeatReporter(self, fleet_config)
+                await self._heartbeat.start()
+            except ImportError:
+                log.warning("heartbeat reporter requires 'httpx' — skipping")
+
+    async def _stop_fleet_services(self) -> None:
+        """Stop the HTTP API server and heartbeat reporter."""
+        if self._heartbeat:
+            await self._heartbeat.stop()
+            self._heartbeat = None
+
+        if self._http_server:
+            self._http_server.should_exit = True
+            if self._http_task and not self._http_task.done():
+                try:
+                    await asyncio.wait_for(self._http_task, timeout=5.0)
+                except asyncio.TimeoutError:
+                    self._http_task.cancel()
+            self._http_server = None
+            self._http_task = None
 
     # --- IPC Server ---
 
