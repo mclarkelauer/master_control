@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS deployments (
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     started_at      TEXT,
     completed_at    TEXT,
-    error           TEXT
+    error           TEXT,
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS deployment_clients (

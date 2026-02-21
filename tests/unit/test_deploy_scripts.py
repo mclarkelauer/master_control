@@ -39,6 +39,7 @@ class TestDeployClientsScript:
         assert "--parallel" in result.stdout
         assert "--dry-run" in result.stdout
         assert "--sync-only" in result.stdout
+        assert "--version" in result.stdout
 
     def test_unknown_option_fails(self):
         result = subprocess.run(
@@ -47,6 +48,11 @@ class TestDeployClientsScript:
             text=True,
         )
         assert result.returncode == 1
+
+    def test_supports_version_flag(self):
+        content = self.script.read_text()
+        assert "DEPLOY_VERSION" in content
+        assert ".mctl-version" in content
 
     def test_supports_env_vars(self):
         content = self.script.read_text()
