@@ -86,6 +86,7 @@ class HeartbeatReporter:
         return HeartbeatPayload(
             client_name=self._config.client_name or "unknown",
             timestamp=datetime.now(),
+            deployed_version=self._orchestrator.deployed_version,
             workloads=[
                 WorkloadInfo(
                     name=s.spec.name,

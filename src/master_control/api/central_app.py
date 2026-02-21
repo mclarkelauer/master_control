@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from master_control.api.central_routes import router as api_router
 from master_control.api.fleet_client import FleetClient
 from master_control.config.schema import CentralConfig
+from master_control.fleet.deployer import RollingDeployer
 from master_control.fleet.store import FleetDatabase, FleetStateStore
 
 log = structlog.get_logger()
@@ -32,6 +33,17 @@ def create_central_app(config: CentralConfig) -> FastAPI:
         app.state.fleet_db = db
         app.state.fleet_store = FleetStateStore(db)
         app.state.fleet_client = FleetClient(api_token=config.api_token)
+
+        # Initialize rolling deployer
+        deploy_script = Path(config.deploy_script_path) if config.deploy_script_path else (
+            Path(__file__).parent.parent.parent.parent / "scripts" / "deploy-clients.sh"
+        )
+        app.state.deployer = RollingDeployer(
+            fleet_store=app.state.fleet_store,
+            fleet_client=app.state.fleet_client,
+            deploy_script_path=deploy_script,
+            inventory_path=Path(config.inventory_path),
+        )
 
         # Start stale-client detection background task
         async def check_stale():

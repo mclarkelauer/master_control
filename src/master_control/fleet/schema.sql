@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS fleet_clients (
     memory_total_mb REAL,
     disk_used_gb    REAL,
     disk_total_gb   REAL,
+    deployed_version TEXT,
+    deployed_at     TEXT,
     updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

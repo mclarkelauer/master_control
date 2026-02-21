@@ -35,6 +35,7 @@ class HeartbeatPayload(BaseModel):
 
     client_name: str
     timestamp: datetime
+    deployed_version: str | None = None
     workloads: list[WorkloadInfo] = []
     system: SystemMetrics = SystemMetrics()
 
@@ -50,6 +51,7 @@ class ClientOverview(BaseModel):
     workload_count: int = 0
     workloads_running: int = 0
     workloads_failed: int = 0
+    deployed_version: str | None = None
     system: SystemMetrics | None = None
 
 
@@ -58,3 +60,40 @@ class CommandResponse(BaseModel):
 
     success: bool
     message: str
+
+
+class DeploymentRequest(BaseModel):
+    """Request to start a rolling deployment."""
+
+    version: str
+    target_clients: list[str] | None = None
+    batch_size: int = 1
+    health_check_timeout: float = 60.0
+    auto_rollback: bool = True
+
+
+class DeploymentClientStatus(BaseModel):
+    """Per-client status within a deployment."""
+
+    client_name: str
+    batch_number: int = 0
+    status: str = "pending"
+    previous_version: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+
+
+class DeploymentStatus(BaseModel):
+    """Status of a deployment."""
+
+    id: str
+    version: str
+    status: str
+    batch_size: int
+    target_clients: list[str]
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    client_statuses: list[DeploymentClientStatus] = []

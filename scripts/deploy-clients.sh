@@ -10,6 +10,7 @@ PARALLEL="$MCTL_DEPLOY_PARALLEL"
 DRY_RUN=0
 SYNC_ONLY=0
 FORCE_RESTART=0
+DEPLOY_VERSION=""
 TARGET_CLIENTS=()
 
 # --- Usage ---
@@ -26,6 +27,7 @@ Options:
   --dry-run           Show what would be done without doing it
   --sync-only         Sync project files and configs but don't restart daemon
   --force-restart     Force daemon restart even if no config changes
+  --version VERSION   Write version string to .mctl-version on remote
   -h, --help          Show this help
 
 Environment variables:
@@ -62,6 +64,10 @@ while [[ $# -gt 0 ]]; do
         --force-restart)
             FORCE_RESTART=1
             shift
+            ;;
+        --version)
+            DEPLOY_VERSION="$2"
+            shift 2
             ;;
         -h|--help|help)
             usage
@@ -188,6 +194,12 @@ deploy_client() {
                 warn "[$name] Config file not found: $config_path"
             fi
         done <<< "$workloads"
+    fi
+
+    # Step 4b: Write version file if specified
+    if [[ -n "$DEPLOY_VERSION" ]]; then
+        info "[$name] Writing version: $DEPLOY_VERSION"
+        ssh $ssh_opts "$ssh_target" "echo '$DEPLOY_VERSION' > '$install_dir/.mctl-version'" 2>>"$log_file"
     fi
 
     # Step 5: Run bootstrap on remote (unless --sync-only)

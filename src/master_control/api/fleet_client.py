@@ -60,6 +60,12 @@ class FleetClient:
         )
         return CommandResponse(**data)
 
+    async def health_check(self, host: str, port: int) -> dict:
+        return await self._request("GET", f"{self._base_url(host, port)}/api/health")
+
+    async def reload_configs(self, host: str, port: int) -> dict:
+        return await self._request("POST", f"{self._base_url(host, port)}/api/reload")
+
     async def get_logs(
         self, host: str, port: int, name: str, lines: int = 50
     ) -> dict:

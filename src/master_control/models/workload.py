@@ -41,6 +41,7 @@ class WorkloadSpec:
     restart_delay_seconds: float = 5.0
     timeout_seconds: float | None = None
     tags: list[str] = field(default_factory=list)
+    version: str | None = None
 
 
 @dataclass
@@ -68,4 +69,5 @@ class WorkloadState:
             "last_started": self.last_started.isoformat() if self.last_started else None,
             "last_stopped": self.last_stopped.isoformat() if self.last_stopped else None,
             "last_error": self.last_error,
+            "version": self.spec.version,
         }

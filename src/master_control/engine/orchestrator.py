@@ -48,10 +48,15 @@ class Orchestrator:
         self._http_server = None
         self._http_task: asyncio.Task | None = None
         self._heartbeat = None
+        self._deployed_version: str | None = None
 
     @property
     def registry(self) -> WorkloadRegistry:
         return self._registry
+
+    @property
+    def deployed_version(self) -> str | None:
+        return self._deployed_version
 
     async def start(self) -> None:
         """Boot: load configs, init DB, start all workloads per their run_mode."""
@@ -63,6 +68,11 @@ class Orchestrator:
         await self._db.connect()
         self._run_history = RunHistoryRepo(self._db)
         self._state_repo = WorkloadStateRepo(self._db)
+
+        # Read deployed version if available
+        version_file = self.config_dir.parent / ".mctl-version"
+        if version_file.exists():
+            self._deployed_version = version_file.read_text().strip() or None
 
         # Load configs
         loader = ConfigLoader(self.config_dir)
@@ -161,6 +171,72 @@ class Orchestrator:
             else:
                 states.append(WorkloadState(spec=spec))
         return states
+
+    async def reload_configs(self) -> dict:
+        """Re-read config files and reconcile with running workloads.
+
+        Returns a summary: {added: [...], removed: [...], restarted: [...], unchanged: [...]}.
+        """
+        loader = ConfigLoader(self.config_dir)
+        new_specs = loader.load_all()
+        new_specs_by_name = {s.name: s for s in new_specs}
+        old_names = {s.name for s in self._registry.list_all()}
+        new_names = set(new_specs_by_name.keys())
+
+        added = sorted(new_names - old_names)
+        removed = sorted(old_names - new_names)
+        common = old_names & new_names
+
+        restarted = []
+        unchanged = []
+
+        # Stop removed workloads
+        for name in removed:
+            runner = self._runners.get(name)
+            if runner and runner.is_running:
+                await runner.stop()
+            self._runners.pop(name, None)
+            self._scheduler.remove(name)
+            self._registry.unregister(name)
+            log.info("workload removed", workload=name)
+
+        # Start new workloads
+        for name in added:
+            self._registry.register(new_specs_by_name[name])
+            await self._start_workload(name)
+            log.info("workload added", workload=name)
+
+        # Check for changes in existing workloads
+        for name in sorted(common):
+            old_spec = self._registry.get(name)
+            new_spec = new_specs_by_name[name]
+            if old_spec != new_spec:
+                runner = self._runners.get(name)
+                if runner and runner.is_running:
+                    await runner.stop()
+                self._runners.pop(name, None)
+                self._scheduler.remove(name)
+                self._registry.unregister(name)
+                self._registry.register(new_spec)
+                await self._start_workload(name)
+                restarted.append(name)
+                log.info("workload restarted (config changed)", workload=name)
+            else:
+                unchanged.append(name)
+
+        # Re-read version file in case it changed
+        version_file = self.config_dir.parent / ".mctl-version"
+        if version_file.exists():
+            self._deployed_version = version_file.read_text().strip() or None
+
+        result = {
+            "added": added,
+            "removed": removed,
+            "restarted": restarted,
+            "unchanged": unchanged,
+        }
+        log.info("configs reloaded", **result)
+        return result
 
     async def _start_workload(self, name: str) -> None:
         """Internal: create a runner and start it."""
@@ -347,6 +423,10 @@ class Orchestrator:
         if cmd == "restart" and name:
             msg = await self.restart_workload(name)
             return {"message": msg}
+
+        if cmd == "reload":
+            result = await self.reload_configs()
+            return {"changes": result}
 
         if cmd == "shutdown":
             asyncio.get_event_loop().call_soon(

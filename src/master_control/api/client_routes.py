@@ -83,6 +83,14 @@ async def restart_workload(request, name: str) -> CommandResponse:
     return CommandResponse(success=success, message=msg)
 
 
+@router.post("/reload")
+async def reload_configs(request) -> dict:
+    """Hot-reload workload configs from disk."""
+    orch = _get_orchestrator(request)
+    result = await orch.reload_configs()
+    return {"success": True, "changes": result}
+
+
 @router.get("/logs/{name}")
 async def workload_logs(
     request, name: str, lines: int = Query(default=50, ge=1, le=10000)

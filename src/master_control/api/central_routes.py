@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from master_control.api.models import (
     ClientOverview,
     CommandResponse,
+    DeploymentRequest,
+    DeploymentStatus,
     HeartbeatPayload,
     WorkloadInfo,
 )
@@ -156,3 +158,61 @@ async def get_workload_logs(
         return await fc.get_logs(host, port, workload_name, lines)
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.post("/fleet/clients/{client_name}/reload")
+async def reload_client_configs(request: Request, client_name: str) -> dict:
+    """Tell a specific client to reload its configs from disk."""
+    host, port = await _resolve_endpoint(request, client_name)
+    fc = _get_fleet_client(request)
+    try:
+        return await fc.reload_configs(host, port)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+# --- Deployments ---
+
+
+@router.post("/fleet/deployments", response_model=DeploymentStatus)
+async def create_deployment(
+    request: Request, body: DeploymentRequest
+) -> DeploymentStatus:
+    """Start a new rolling deployment."""
+    deployer = request.app.state.deployer
+    store = _get_store(request)
+    try:
+        deployment_id = await deployer.start_deployment(body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    deployment = await store.get_deployment(deployment_id)
+    if not deployment:
+        raise HTTPException(status_code=500, detail="Failed to create deployment")
+    return deployment
+
+
+@router.get("/fleet/deployments", response_model=list[DeploymentStatus])
+async def list_deployments(
+    request: Request, limit: int = Query(default=20, ge=1, le=100)
+) -> list[DeploymentStatus]:
+    """List recent deployments."""
+    store = _get_store(request)
+    return await store.list_deployments(limit)
+
+
+@router.get("/fleet/deployments/{deployment_id}", response_model=DeploymentStatus)
+async def get_deployment(request: Request, deployment_id: str) -> DeploymentStatus:
+    """Get deployment status including per-client details."""
+    store = _get_store(request)
+    deployment = await store.get_deployment(deployment_id)
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Deployment not found")
+    return deployment
+
+
+@router.post("/fleet/deployments/{deployment_id}/cancel")
+async def cancel_deployment(request: Request, deployment_id: str) -> dict:
+    """Cancel an in-progress deployment."""
+    deployer = request.app.state.deployer
+    await deployer.cancel_deployment(deployment_id)
+    return {"success": True, "message": "Deployment cancelled"}

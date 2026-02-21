@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from importlib import resources
 from pathlib import Path
@@ -10,6 +11,8 @@ import aiosqlite
 
 from master_control.api.models import (
     ClientOverview,
+    DeploymentClientStatus,
+    DeploymentStatus,
     HeartbeatPayload,
     SystemMetrics,
     WorkloadInfo,
@@ -30,6 +33,31 @@ class FleetDatabase:
         await self._conn.execute("PRAGMA foreign_keys=ON")
         schema_sql = resources.files("master_control.fleet").joinpath("schema.sql").read_text()
         await self._conn.executescript(schema_sql)
+        await self._apply_migrations()
+
+    async def _apply_migrations(self) -> None:
+        """Apply pending SQL migrations from the migrations/ directory."""
+        conn = self._conn
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT)"
+        )
+        cursor = await conn.execute("SELECT name FROM _migrations")
+        applied = {row[0] for row in await cursor.fetchall()}
+
+        migrations_dir = resources.files("master_control.fleet").joinpath("migrations")
+        migration_files = sorted(
+            f for f in migrations_dir.iterdir() if f.name.endswith(".sql")
+        )
+        for migration_file in migration_files:
+            if migration_file.name in applied:
+                continue
+            sql = migration_file.read_text()
+            await conn.executescript(sql)
+            await conn.execute(
+                "INSERT INTO _migrations (name, applied_at) VALUES (?, datetime('now'))",
+                (migration_file.name,),
+            )
+            await conn.commit()
 
     async def close(self) -> None:
         if self._conn:
@@ -58,8 +86,8 @@ class FleetStateStore:
             """INSERT INTO fleet_clients
                    (name, host, api_port, status, last_seen,
                     cpu_percent, memory_used_mb, memory_total_mb,
-                    disk_used_gb, disk_total_gb, updated_at)
-               VALUES (?, ?, ?, 'online', ?, ?, ?, ?, ?, ?, ?)
+                    disk_used_gb, disk_total_gb, deployed_version, updated_at)
+               VALUES (?, ?, ?, 'online', ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(name) DO UPDATE SET
                    host = excluded.host,
                    status = 'online',
@@ -69,6 +97,7 @@ class FleetStateStore:
                    memory_total_mb = excluded.memory_total_mb,
                    disk_used_gb = excluded.disk_used_gb,
                    disk_total_gb = excluded.disk_total_gb,
+                   deployed_version = COALESCE(excluded.deployed_version, deployed_version),
                    updated_at = excluded.updated_at""",
             (
                 payload.client_name,
@@ -80,6 +109,7 @@ class FleetStateStore:
                 payload.system.memory_total_mb,
                 payload.system.disk_used_gb,
                 payload.system.disk_total_gb,
+                payload.deployed_version,
                 now,
             ),
         )
@@ -266,5 +296,183 @@ class FleetStateStore:
             workload_count=row["workload_count"],
             workloads_running=row["workloads_running"] or 0,
             workloads_failed=row["workloads_failed"] or 0,
+            deployed_version=row["deployed_version"],
             system=system,
         )
+
+    # --- Deployment CRUD ---
+
+    async def create_deployment(
+        self,
+        deployment_id: str,
+        version: str,
+        target_clients: list[str],
+        batch_size: int,
+    ) -> None:
+        conn = self._db.conn
+        now = datetime.now().isoformat()
+        await conn.execute(
+            """INSERT INTO deployments (id, version, status, batch_size, target_clients, created_at)
+               VALUES (?, ?, 'pending', ?, ?, ?)""",
+            (deployment_id, version, batch_size, json.dumps(target_clients), now),
+        )
+        await conn.commit()
+
+    async def create_deployment_clients(
+        self,
+        deployment_id: str,
+        clients: list[tuple[str, int]],
+    ) -> None:
+        """Batch-insert all deployment client records. clients is [(name, batch_number), ...]."""
+        conn = self._db.conn
+        await conn.executemany(
+            """INSERT INTO deployment_clients (deployment_id, client_name, batch_number, status)
+               VALUES (?, ?, ?, 'pending')""",
+            [(deployment_id, name, batch_num) for name, batch_num in clients],
+        )
+        await conn.commit()
+
+    async def update_deployment_status(
+        self, deployment_id: str, status: str, error: str | None = None
+    ) -> None:
+        conn = self._db.conn
+        now = datetime.now().isoformat()
+        if status == "in_progress":
+            await conn.execute(
+                "UPDATE deployments SET status = ?, started_at = ?, updated_at = datetime('now') WHERE id = ?",
+                (status, now, deployment_id),
+            )
+        elif status in ("completed", "failed", "rolled_back"):
+            await conn.execute(
+                "UPDATE deployments SET status = ?, completed_at = ?, error = ?, updated_at = datetime('now') WHERE id = ?",
+                (status, now, error, deployment_id),
+            )
+        else:
+            await conn.execute(
+                "UPDATE deployments SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ?",
+                (status, error, deployment_id),
+            )
+        await conn.commit()
+
+    async def update_deployment_client_status(
+        self,
+        deployment_id: str,
+        client_name: str,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        conn = self._db.conn
+        now = datetime.now().isoformat()
+        if status == "deploying":
+            await conn.execute(
+                """UPDATE deployment_clients SET status = ?, started_at = ?
+                   WHERE deployment_id = ? AND client_name = ?""",
+                (status, now, deployment_id, client_name),
+            )
+        elif status in ("healthy", "failed", "rolled_back"):
+            await conn.execute(
+                """UPDATE deployment_clients SET status = ?, completed_at = ?, error = ?
+                   WHERE deployment_id = ? AND client_name = ?""",
+                (status, now, error, deployment_id, client_name),
+            )
+        else:
+            await conn.execute(
+                """UPDATE deployment_clients SET status = ?, error = ?
+                   WHERE deployment_id = ? AND client_name = ?""",
+                (status, error, deployment_id, client_name),
+            )
+        await conn.commit()
+
+    async def set_deployment_client_previous_version(
+        self, deployment_id: str, client_name: str, version: str | None
+    ) -> None:
+        conn = self._db.conn
+        await conn.execute(
+            """UPDATE deployment_clients SET previous_version = ?
+               WHERE deployment_id = ? AND client_name = ?""",
+            (version, deployment_id, client_name),
+        )
+        await conn.commit()
+
+    async def get_deployment(self, deployment_id: str) -> DeploymentStatus | None:
+        conn = self._db.conn
+        cursor = await conn.execute(
+            "SELECT * FROM deployments WHERE id = ?", (deployment_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+
+        client_statuses = await self.get_deployment_clients(deployment_id)
+        return DeploymentStatus(
+            id=row["id"],
+            version=row["version"],
+            status=row["status"],
+            batch_size=row["batch_size"],
+            target_clients=json.loads(row["target_clients"]),
+            created_at=row["created_at"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            error=row["error"],
+            client_statuses=client_statuses,
+        )
+
+    async def get_deployment_clients(
+        self, deployment_id: str
+    ) -> list[DeploymentClientStatus]:
+        conn = self._db.conn
+        cursor = await conn.execute(
+            """SELECT * FROM deployment_clients
+               WHERE deployment_id = ? ORDER BY batch_number, client_name""",
+            (deployment_id,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            DeploymentClientStatus(
+                client_name=row["client_name"],
+                batch_number=row["batch_number"],
+                status=row["status"],
+                previous_version=row["previous_version"],
+                started_at=row["started_at"],
+                completed_at=row["completed_at"],
+                error=row["error"],
+            )
+            for row in rows
+        ]
+
+    async def list_deployments(self, limit: int = 20) -> list[DeploymentStatus]:
+        conn = self._db.conn
+        rows = await conn.execute_fetchall(
+            "SELECT * FROM deployments ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        )
+        result = []
+        for row in rows:
+            client_statuses = await self.get_deployment_clients(row["id"])
+            result.append(
+                DeploymentStatus(
+                    id=row["id"],
+                    version=row["version"],
+                    status=row["status"],
+                    batch_size=row["batch_size"],
+                    target_clients=json.loads(row["target_clients"]),
+                    created_at=row["created_at"],
+                    started_at=row["started_at"],
+                    completed_at=row["completed_at"],
+                    error=row["error"],
+                    client_statuses=client_statuses,
+                )
+            )
+        return result
+
+    async def update_client_deployed_version(
+        self, client_name: str, version: str
+    ) -> None:
+        conn = self._db.conn
+        now = datetime.now().isoformat()
+        await conn.execute(
+            """UPDATE fleet_clients SET deployed_version = ?, deployed_at = ?, updated_at = datetime('now')
+               WHERE name = ?""",
+            (version, now, client_name),
+        )
+        await conn.commit()

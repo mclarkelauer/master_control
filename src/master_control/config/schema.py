@@ -29,6 +29,7 @@ class CentralConfig(BaseModel):
     inventory_path: str = "./inventory.yaml"
     api_token: str | None = None
     stale_threshold_seconds: float = 90.0
+    deploy_script_path: str | None = None
 
 
 class DaemonConfig(BaseModel):
@@ -45,6 +46,7 @@ class WorkloadConfig(BaseModel):
     type: Literal["agent", "script", "service"]
     run_mode: Literal["schedule", "forever", "n_times"]
     module: str
+    version: str | None = None
     entry_point: str = "run"
     schedule: str | None = None
     max_runs: int | None = None
@@ -74,6 +76,7 @@ class WorkloadConfig(BaseModel):
             restart_delay_seconds=self.restart_delay,
             timeout_seconds=self.timeout,
             tags=self.tags,
+            version=self.version,
         )
 
 
