@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Master Control{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header class="header">
+        <div class="container header-inner">
+            <a href="/" class="logo">Master Control</a>
+            <nav class="nav">
+                <a href="/" class="nav-link">Fleet</a>
+                <a href="/deployments" class="nav-link">Deployments</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <script>
+        window.API_TOKEN = {{ api_token | tojson }};
+        window.API_BASE = '/api';
+    </script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/sparkline.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Fleet Overview — Master Control{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Fleet Overview</h2>
+    <div class="summary-bar" id="fleet-summary">
+        <div class="summary-item">
+            <span class="summary-value" id="total-count">—</span>
+            <span class="summary-label">Total</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-value text-success" id="online-count">—</span>
+            <span class="summary-label">Online</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-value text-dim" id="offline-count">—</span>
+            <span class="summary-label">Offline</span>
+        </div>
+    </div>
+</div>
+
+<div class="controls-bar">
+    <div class="controls-left">
+        <input type="text" id="search-input" class="search-input" placeholder="Search clients…">
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-status="all">All</button>
+            <button class="filter-btn" data-status="online">Online</button>
+            <button class="filter-btn" data-status="offline">Offline</button>
+        </div>
+    </div>
+    <div class="controls-right">
+        <select id="sort-select" class="sort-select">
+            <option value="name">Name</option>
+            <option value="cpu">CPU %</option>
+            <option value="memory">Memory %</option>
+            <option value="workloads">Workloads</option>
+            <option value="last_seen">Last Seen</option>
+        </select>
+        <button id="sort-direction" class="btn btn-sm" title="Toggle sort direction">↓</button>
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="grid" title="Grid view">▦</button>
+            <button class="view-btn" data-view="table" title="Table view">☰</button>
+        </div>
+    </div>
+</div>
+
+<div class="client-grid" id="client-grid">
+    <p class="text-dim">Loading fleet data…</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

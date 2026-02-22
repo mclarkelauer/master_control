@@ -75,6 +75,7 @@ def create_central_app(config: CentralConfig) -> FastAPI:
         await db.close()
 
     app = FastAPI(title="Master Control Central", lifespan=lifespan)
+    app.state.config = config
 
     # Auth middleware
     if config.api_token:

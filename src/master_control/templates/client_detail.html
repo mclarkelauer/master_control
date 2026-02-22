@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}{{ client_name }} — Master Control{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2 id="client-heading">{{ client_name }}</h2>
+        <span class="text-dim" id="client-subtitle">Loading…</span>
+    </div>
+    <div class="header-actions">
+        <span class="badge" id="client-status">—</span>
+        <button class="btn" onclick="reloadConfigs()">Reload Configs</button>
+    </div>
+</div>
+
+<div class="info-grid">
+    <div class="card">
+        <h3>System Metrics</h3>
+        <div id="system-metrics" class="metric-grid">
+            <p class="text-dim">Loading…</p>
+        </div>
+    </div>
+    <div class="card">
+        <h3>Details</h3>
+        <dl id="client-details" class="detail-list">
+            <p class="text-dim">Loading…</p>
+        </dl>
+    </div>
+</div>
+
+<div class="section">
+    <h3>Workloads</h3>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Mode</th>
+                    <th>Status</th>
+                    <th>PID</th>
+                    <th>Runs</th>
+                    <th>Last Started</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="workload-tbody">
+                <tr><td colspan="8" class="text-dim">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="logs-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="logs-title">Logs</h3>
+            <button class="btn btn-sm" onclick="closeLogs()">Close</button>
+        </div>
+        <pre class="log-output" id="logs-content"></pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>const CLIENT_NAME = {{ client_name | tojson }};</script>
+<script src="/static/js/client.js"></script>
+{% endblock %}
