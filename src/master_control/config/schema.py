@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from master_control.models.workload import RunMode, WorkloadSpec, WorkloadType
 
@@ -54,6 +54,22 @@ class WorkloadConfig(BaseModel):
     restart_delay: float = 5.0
     timeout: float | None = None
     tags: list[str] = []
+    memory_limit_mb: int | None = None
+    cpu_nice: int | None = None
+
+    @field_validator("memory_limit_mb")
+    @classmethod
+    def validate_memory_limit(cls, v: int | None) -> int | None:
+        if v is not None and v <= 0:
+            raise ValueError("'memory_limit_mb' must be a positive integer")
+        return v
+
+    @field_validator("cpu_nice")
+    @classmethod
+    def validate_cpu_nice(cls, v: int | None) -> int | None:
+        if v is not None and not (-20 <= v <= 19):
+            raise ValueError("'cpu_nice' must be between -20 and 19")
+        return v
 
     @model_validator(mode="after")
     def validate_mode_fields(self) -> "WorkloadConfig":
@@ -77,6 +93,8 @@ class WorkloadConfig(BaseModel):
             timeout_seconds=self.timeout,
             tags=self.tags,
             version=self.version,
+            memory_limit_mb=self.memory_limit_mb,
+            cpu_nice=self.cpu_nice,
         )
 
 

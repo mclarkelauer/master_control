@@ -116,6 +116,31 @@ class HealthChecker:
                 )
                 state.status = WorkloadStatus.FAILED
                 state.last_error = f"Process {state.pid} not found"
+                continue
+
+            if state.spec.memory_limit_mb is not None:
+                self._check_memory_usage(state)
+
+    @staticmethod
+    def _check_memory_usage(state) -> None:
+        """Log a warning if a workload's RSS approaches its memory limit."""
+        try:
+            import psutil
+
+            proc = psutil.Process(state.pid)
+            rss_mb = proc.memory_info().rss / (1024 * 1024)
+            threshold = state.spec.memory_limit_mb * 0.9
+            if rss_mb >= threshold:
+                log.warning(
+                    "workload approaching memory limit",
+                    workload=state.spec.name,
+                    rss_mb=round(rss_mb, 1),
+                    limit_mb=state.spec.memory_limit_mb,
+                )
+        except ImportError:
+            pass
+        except Exception:
+            pass
 
     @staticmethod
     def _is_process_alive(pid: int) -> bool:

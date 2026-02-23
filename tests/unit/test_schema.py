@@ -106,6 +106,83 @@ class TestWorkloadConfig:
         assert config.timeout is None
         assert config.params == {}
         assert config.tags == []
+        assert config.memory_limit_mb is None
+        assert config.cpu_nice is None
+
+    def test_memory_limit_valid(self) -> None:
+        config = WorkloadConfig(
+            name="test",
+            type="agent",
+            run_mode="forever",
+            module="agents.test",
+            memory_limit_mb=128,
+        )
+        spec = config.to_spec()
+        assert spec.memory_limit_mb == 128
+
+    def test_memory_limit_zero_raises(self) -> None:
+        with pytest.raises(ValidationError, match="memory_limit_mb.*positive"):
+            WorkloadConfig(
+                name="test",
+                type="agent",
+                run_mode="forever",
+                module="agents.test",
+                memory_limit_mb=0,
+            )
+
+    def test_memory_limit_negative_raises(self) -> None:
+        with pytest.raises(ValidationError, match="memory_limit_mb.*positive"):
+            WorkloadConfig(
+                name="test",
+                type="agent",
+                run_mode="forever",
+                module="agents.test",
+                memory_limit_mb=-10,
+            )
+
+    def test_cpu_nice_valid(self) -> None:
+        config = WorkloadConfig(
+            name="test",
+            type="agent",
+            run_mode="forever",
+            module="agents.test",
+            cpu_nice=10,
+        )
+        spec = config.to_spec()
+        assert spec.cpu_nice == 10
+
+    def test_cpu_nice_out_of_range_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cpu_nice.*-20.*19"):
+            WorkloadConfig(
+                name="test",
+                type="agent",
+                run_mode="forever",
+                module="agents.test",
+                cpu_nice=20,
+            )
+
+    def test_cpu_nice_too_low_raises(self) -> None:
+        with pytest.raises(ValidationError, match="cpu_nice.*-20.*19"):
+            WorkloadConfig(
+                name="test",
+                type="agent",
+                run_mode="forever",
+                module="agents.test",
+                cpu_nice=-21,
+            )
+
+    def test_resource_limits_in_spec(self) -> None:
+        config = WorkloadConfig(
+            name="test",
+            type="agent",
+            run_mode="forever",
+            module="agents.test",
+            memory_limit_mb=256,
+            cpu_nice=5,
+        )
+        spec = config.to_spec()
+        assert spec.memory_limit_mb == 256
+        assert spec.cpu_nice == 5
 
 
 class TestMultiWorkloadConfig:

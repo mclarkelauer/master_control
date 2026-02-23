@@ -13,6 +13,7 @@ import structlog
 
 from master_control.db.repository import RunHistoryRepo
 from master_control.engine.modes import RunModeStrategy, get_strategy
+from master_control.engine.rlimits import make_preexec_fn
 from master_control.models.workload import WorkloadSpec, WorkloadState, WorkloadStatus
 
 log = structlog.get_logger()
@@ -100,10 +101,20 @@ class WorkloadRunner:
             log_file = self._log_dir / f"{self.spec.name}.log"
             cmd.extend(["--log-file", str(log_file)])
 
+        preexec_fn = make_preexec_fn(self.spec.memory_limit_mb, self.spec.cpu_nice)
+        if preexec_fn:
+            log.info(
+                "applying resource limits",
+                workload=self.spec.name,
+                memory_limit_mb=self.spec.memory_limit_mb,
+                cpu_nice=self.spec.cpu_nice,
+            )
+
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=preexec_fn,
         )
         return process
 

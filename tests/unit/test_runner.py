@@ -136,3 +136,29 @@ class TestWorkloadRunner:
         records = await run_history.get_history("history_test")
         assert len(records) == 1
         assert records[0].exit_code == 0
+
+    async def test_workload_with_resource_limits(
+        self, run_history: RunHistoryRepo, state_repo: WorkloadStateRepo
+    ) -> None:
+        spec = WorkloadSpec(
+            name="limited",
+            workload_type=WorkloadType.AGENT,
+            run_mode=RunMode.N_TIMES,
+            module_path="agents.examples.hello_agent",
+            entry_point="run",
+            max_runs=1,
+            restart_delay_seconds=0.0,
+            memory_limit_mb=512,
+            cpu_nice=10,
+        )
+        await _seed_workload(state_repo, "limited")
+        runner = WorkloadRunner(spec, run_history)
+        await runner.start()
+
+        for _ in range(50):
+            if runner.state.status == WorkloadStatus.COMPLETED:
+                break
+            await asyncio.sleep(0.1)
+
+        assert runner.state.status == WorkloadStatus.COMPLETED
+        assert runner.state.run_count == 1
