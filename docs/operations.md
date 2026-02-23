@@ -326,6 +326,18 @@ make build-image IMAGE=raspios.img.xz HOSTNAME=node-1 \
     EXTRA_ARGS="--ssh-key ~/.ssh/id_ed25519.pub --fleet-url http://host:8080"
 ```
 
+### What the Image Contains
+
+The built image includes:
+
+- Master Control project files in the install directory (default `/opt/master_control`)
+- Pre-created runtime directories (`configs/`, `logs/`, `run/`)
+- SSH authorized keys for both root and the pi user (when `--ssh-key` is provided)
+- WiFi configuration for both NetworkManager (Bookworm+) and wpa_supplicant (legacy)
+- Workload configs (from `--configs`, `--inventory`/`--client`, or the project default)
+- Fleet daemon config (when `--fleet-url` is provided)
+- A first-boot systemd service that completes setup on the Pi's first power-on
+
 ### What Happens on First Boot
 
 1. The Pi boots with SSH enabled and the configured hostname
@@ -342,8 +354,8 @@ make build-image IMAGE=raspios.img.xz HOSTNAME=node-1 \
 | `--image FILE` | Base Raspberry Pi OS image (required) |
 | `--output FILE` | Output path (default: `mctl-<hostname>.img`) |
 | `--hostname NAME` | Pi hostname (default: `mctl-node`) |
-| `--ssh-key FILE` | SSH public key to authorize |
-| `--wifi-ssid SSID` | Pre-configure WiFi |
+| `--ssh-key FILE` | SSH public key to authorize (installed for both root and pi users) |
+| `--wifi-ssid SSID` | Pre-configure WiFi (NetworkManager on Bookworm+, wpa_supplicant fallback) |
 | `--wifi-password PASS` | WiFi password |
 | `--wifi-country CC` | WiFi country code (default: `US`) |
 | `--inventory FILE` | Inventory file for client-specific config |

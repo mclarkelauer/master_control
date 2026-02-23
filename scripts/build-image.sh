@@ -220,12 +220,25 @@ setup_ssh() {
     info "SSH enabled (boot/ssh sentinel created)"
 
     if [[ -n "$SSH_KEY" ]]; then
+        # Root user.
         local ssh_dir="$MOUNT_ROOT/root/.ssh"
         mkdir -p "$ssh_dir"
         chmod 700 "$ssh_dir"
         cp "$SSH_KEY" "$ssh_dir/authorized_keys"
         chmod 600 "$ssh_dir/authorized_keys"
         info "SSH public key installed for root"
+
+        # Pi user (if home directory exists in the image).
+        if [[ -d "$MOUNT_ROOT/home/pi" ]]; then
+            local pi_ssh_dir="$MOUNT_ROOT/home/pi/.ssh"
+            mkdir -p "$pi_ssh_dir"
+            chmod 700 "$pi_ssh_dir"
+            cp "$SSH_KEY" "$pi_ssh_dir/authorized_keys"
+            chmod 600 "$pi_ssh_dir/authorized_keys"
+            # Pi user is uid/gid 1000 on Raspberry Pi OS.
+            chown -R 1000:1000 "$pi_ssh_dir"
+            info "SSH public key installed for pi user"
+        fi
     fi
 }
 
@@ -233,6 +246,36 @@ setup_ssh() {
 setup_wifi() {
     [[ -n "$WIFI_SSID" ]] || return 0
 
+    # Raspberry Pi OS Bookworm+ uses NetworkManager instead of wpa_supplicant.
+    # We write both formats so the image works on either version.
+    local nm_dir="$MOUNT_ROOT/etc/NetworkManager/system-connections"
+    if [[ -d "$MOUNT_ROOT/etc/NetworkManager" ]]; then
+        mkdir -p "$nm_dir"
+        cat > "$nm_dir/mctl-wifi.nmconnection" <<NMEOF
+[connection]
+id=mctl-wifi
+type=wifi
+autoconnect=true
+
+[wifi]
+mode=infrastructure
+ssid=$WIFI_SSID
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk=$WIFI_PASSWORD
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
+NMEOF
+        chmod 600 "$nm_dir/mctl-wifi.nmconnection"
+        info "WiFi configured (NetworkManager): SSID=$WIFI_SSID"
+    fi
+
+    # Legacy wpa_supplicant fallback for older Raspberry Pi OS images.
     cat > "$MOUNT_BOOT/wpa_supplicant.conf" <<WPAEOF
 country=$WIFI_COUNTRY
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
@@ -244,7 +287,7 @@ network={
     key_mgmt=WPA-PSK
 }
 WPAEOF
-    info "WiFi configured: SSID=$WIFI_SSID country=$WIFI_COUNTRY"
+    info "WiFi configured (wpa_supplicant fallback): SSID=$WIFI_SSID country=$WIFI_COUNTRY"
 }
 
 # ─── Set hostname ────────────────────────────────────────────────
@@ -274,6 +317,9 @@ copy_project() {
         --exclude='configs/' \
         "$MCTL_PROJECT_ROOT/" "$target/"
 
+    # Create runtime directories (excluded from rsync but needed at boot).
+    mkdir -p "$target"/{configs,logs,run}
+
     # Ensure scripts are executable.
     chmod +x "$target"/scripts/*.sh 2>/dev/null || true
     chmod +x "$target"/scripts/lib/*.sh 2>/dev/null || true
@@ -293,7 +339,7 @@ copy_configs() {
         if [[ -f "$helper" ]]; then
             local idx
             # Find client index by name.
-            idx=$(python3 "$helper" "$INVENTORY" list-clients \
+            idx=$(python3 "$helper" --inventory "$INVENTORY" list-clients \
                 | awk -v name="$CLIENT" '$2 == name { print $1; exit }')
 
             if [[ -z "$idx" ]]; then
@@ -302,7 +348,7 @@ copy_configs() {
             fi
 
             local workloads
-            workloads=$(python3 "$helper" "$INVENTORY" get-workloads "$idx" 2>/dev/null || true)
+            workloads=$(python3 "$helper" --inventory "$INVENTORY" get-workloads "$idx" 2>/dev/null || true)
 
             if [[ -n "$workloads" ]]; then
                 while IFS= read -r wl_path; do
@@ -320,7 +366,7 @@ copy_configs() {
 
             # Also extract and write per-client env overrides.
             local env_vars
-            env_vars=$(python3 "$helper" "$INVENTORY" get-env "$idx" 2>/dev/null || true)
+            env_vars=$(python3 "$helper" --inventory "$INVENTORY" get-env "$idx" 2>/dev/null || true)
             if [[ -n "$env_vars" ]]; then
                 echo "$env_vars" > "$MOUNT_ROOT$INSTALL_DIR/.env"
                 info "Per-client environment overrides written to .env"
