@@ -23,10 +23,12 @@ log = structlog.get_logger()
 def create_central_app(config: CentralConfig) -> FastAPI:
     """Create the central fleet management API application."""
     stale_task: asyncio.Task | None = None
+    mdns_advertiser = None
+    mdns_browser = None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        nonlocal stale_task
+        nonlocal stale_task, mdns_advertiser, mdns_browser
         # Initialize fleet database
         db = FleetDatabase(Path(config.db_path))
         await db.connect()
@@ -35,8 +37,10 @@ def create_central_app(config: CentralConfig) -> FastAPI:
         app.state.fleet_client = FleetClient(api_token=config.api_token)
 
         # Initialize rolling deployer
-        deploy_script = Path(config.deploy_script_path) if config.deploy_script_path else (
-            Path(__file__).parent.parent.parent.parent / "scripts" / "deploy-clients.sh"
+        deploy_script = (
+            Path(config.deploy_script_path)
+            if config.deploy_script_path
+            else (Path(__file__).parent.parent.parent.parent / "scripts" / "deploy-clients.sh")
         )
         app.state.deployer = RollingDeployer(
             fleet_store=app.state.fleet_store,
@@ -62,9 +66,53 @@ def create_central_app(config: CentralConfig) -> FastAPI:
 
         stale_task = asyncio.create_task(check_stale())
 
+        # Start mDNS discovery if enabled
+        if config.mdns_enabled:
+            try:
+                from master_control.fleet.discovery import (
+                    CENTRAL_SERVICE_TYPE,
+                    CLIENT_SERVICE_TYPE,
+                    ServiceAdvertiser,
+                    ServiceDiscovery,
+                )
+
+                # Advertise the central API so clients can find us.
+                props = {"token_required": str(bool(config.api_token)).lower()}
+                mdns_advertiser = ServiceAdvertiser(
+                    service_type=CENTRAL_SERVICE_TYPE,
+                    name="mctl-central",
+                    port=config.port,
+                    properties=props,
+                )
+                await mdns_advertiser.start()
+
+                # Browse for client services and auto-register them.
+                store = app.state.fleet_store
+
+                def _on_client_found(
+                    name: str, host: str, port: int, properties: dict[str, str]
+                ) -> None:
+                    asyncio.get_event_loop().call_soon_threadsafe(
+                        lambda: asyncio.create_task(
+                            store.register_discovered_client(name, host, port)
+                        )
+                    )
+
+                mdns_browser = ServiceDiscovery(
+                    service_type=CLIENT_SERVICE_TYPE,
+                    on_found=_on_client_found,
+                )
+                await mdns_browser.start()
+            except ImportError:
+                log.warning("mdns discovery requires 'zeroconf' — skipping")
+
         yield
 
         # Cleanup
+        if mdns_browser:
+            await mdns_browser.stop()
+        if mdns_advertiser:
+            await mdns_advertiser.stop()
         if stale_task and not stale_task.done():
             stale_task.cancel()
             try:

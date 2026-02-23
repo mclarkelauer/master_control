@@ -48,6 +48,8 @@ class Orchestrator:
         self._http_server = None
         self._http_task: asyncio.Task | None = None
         self._heartbeat = None
+        self._mdns_advertiser = None
+        self._mdns_browser = None
         self._deployed_version: str | None = None
 
     @property
@@ -310,18 +312,77 @@ class Orchestrator:
             log.warning("fleet http api requires 'fastapi' and 'uvicorn' — skipping")
             return
 
-        # Start heartbeat reporter if central_api_url is set
-        if fleet_config.central_api_url:
+        # mDNS: advertise this client and discover central API
+        if fleet_config.mdns_enabled:
             try:
-                from master_control.fleet.heartbeat import HeartbeatReporter
+                from master_control.fleet.discovery import (
+                    CENTRAL_SERVICE_TYPE,
+                    CLIENT_SERVICE_TYPE,
+                    ServiceAdvertiser,
+                    ServiceDiscovery,
+                )
 
-                self._heartbeat = HeartbeatReporter(self, fleet_config)
-                await self._heartbeat.start()
+                # Advertise this client so the central can discover it.
+                client_name = fleet_config.client_name or "mctl-client"
+                props = {}
+                if self._deployed_version:
+                    props["version"] = self._deployed_version
+                self._mdns_advertiser = ServiceAdvertiser(
+                    service_type=CLIENT_SERVICE_TYPE,
+                    name=client_name,
+                    port=fleet_config.api_port,
+                    properties=props,
+                )
+                await self._mdns_advertiser.start()
+
+                # If no static central_api_url, discover it via mDNS.
+                if not fleet_config.central_api_url:
+
+                    def _on_central_found(
+                        name: str, host: str, port: int, properties: dict[str, str]
+                    ) -> None:
+                        url = f"http://{host}:{port}"
+                        fleet_config.central_api_url = url
+                        log.info("discovered central api via mdns", url=url)
+                        # Start heartbeat now that we know the URL.
+                        asyncio.get_event_loop().call_soon_threadsafe(
+                            lambda: asyncio.create_task(self._start_heartbeat(fleet_config))
+                        )
+
+                    self._mdns_browser = ServiceDiscovery(
+                        service_type=CENTRAL_SERVICE_TYPE,
+                        on_found=_on_central_found,
+                    )
+                    await self._mdns_browser.start()
             except ImportError:
-                log.warning("heartbeat reporter requires 'httpx' — skipping")
+                log.warning("mdns discovery requires 'zeroconf' — skipping")
+
+        # Start heartbeat reporter if central_api_url is set (static config).
+        if fleet_config.central_api_url:
+            await self._start_heartbeat(fleet_config)
+
+    async def _start_heartbeat(self, fleet_config) -> None:
+        """Start the heartbeat reporter (idempotent — won't start twice)."""
+        if self._heartbeat:
+            return
+        try:
+            from master_control.fleet.heartbeat import HeartbeatReporter
+
+            self._heartbeat = HeartbeatReporter(self, fleet_config)
+            await self._heartbeat.start()
+        except ImportError:
+            log.warning("heartbeat reporter requires 'httpx' — skipping")
 
     async def _stop_fleet_services(self) -> None:
-        """Stop the HTTP API server and heartbeat reporter."""
+        """Stop the HTTP API server, heartbeat reporter, and mDNS services."""
+        if self._mdns_browser:
+            await self._mdns_browser.stop()
+            self._mdns_browser = None
+
+        if self._mdns_advertiser:
+            await self._mdns_advertiser.stop()
+            self._mdns_advertiser = None
+
         if self._heartbeat:
             await self._heartbeat.stop()
             self._heartbeat = None
@@ -429,9 +490,7 @@ class Orchestrator:
             return {"changes": result}
 
         if cmd == "shutdown":
-            asyncio.get_event_loop().call_soon(
-                lambda: asyncio.create_task(self.shutdown())
-            )
+            asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.shutdown()))
             return {"message": "Shutting down"}
 
         return {"error": f"Unknown command: {cmd}"}

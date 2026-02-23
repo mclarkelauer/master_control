@@ -17,6 +17,7 @@ class FleetConfig(BaseModel):
     central_api_url: str | None = None
     heartbeat_interval_seconds: float = 30.0
     api_token: str | None = None
+    mdns_enabled: bool = False
 
 
 class CentralConfig(BaseModel):
@@ -30,6 +31,7 @@ class CentralConfig(BaseModel):
     api_token: str | None = None
     stale_threshold_seconds: float = 90.0
     deploy_script_path: str | None = None
+    mdns_enabled: bool = False
 
 
 class DaemonConfig(BaseModel):

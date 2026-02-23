@@ -45,9 +45,7 @@ class FleetDatabase:
         applied = {row[0] for row in await cursor.fetchall()}
 
         migrations_dir = resources.files("master_control.fleet").joinpath("migrations")
-        migration_files = sorted(
-            f for f in migrations_dir.iterdir() if f.name.endswith(".sql")
-        )
+        migration_files = sorted(f for f in migrations_dir.iterdir() if f.name.endswith(".sql"))
         for migration_file in migration_files:
             if migration_file.name in applied:
                 continue
@@ -221,9 +219,7 @@ class FleetStateStore:
             for row in rows
         ]
 
-    async def get_workload(
-        self, client_name: str, workload_name: str
-    ) -> WorkloadInfo | None:
+    async def get_workload(self, client_name: str, workload_name: str) -> WorkloadInfo | None:
         """Return a single workload for a specific client."""
         conn = self._db.conn
         cursor = await conn.execute(
@@ -299,6 +295,24 @@ class FleetStateStore:
             deployed_version=row["deployed_version"],
             system=system,
         )
+
+    async def register_discovered_client(self, name: str, host: str, port: int) -> None:
+        """Register a client discovered via mDNS. Does not overwrite existing clients
+        that are already online (heartbeats take priority)."""
+        conn = self._db.conn
+        now = datetime.now().isoformat()
+        await conn.execute(
+            """INSERT INTO fleet_clients (name, host, api_port, status, updated_at)
+               VALUES (?, ?, ?, 'discovered', ?)
+               ON CONFLICT(name) DO UPDATE SET
+                   host = excluded.host,
+                   api_port = excluded.api_port,
+                   status = 'discovered',
+                   updated_at = excluded.updated_at
+               WHERE fleet_clients.status != 'online'""",
+            (name, host, port, now),
+        )
+        await conn.commit()
 
     # --- Deployment CRUD ---
 
@@ -396,9 +410,7 @@ class FleetStateStore:
 
     async def get_deployment(self, deployment_id: str) -> DeploymentStatus | None:
         conn = self._db.conn
-        cursor = await conn.execute(
-            "SELECT * FROM deployments WHERE id = ?", (deployment_id,)
-        )
+        cursor = await conn.execute("SELECT * FROM deployments WHERE id = ?", (deployment_id,))
         row = await cursor.fetchone()
         if not row:
             return None
@@ -417,9 +429,7 @@ class FleetStateStore:
             client_statuses=client_statuses,
         )
 
-    async def get_deployment_clients(
-        self, deployment_id: str
-    ) -> list[DeploymentClientStatus]:
+    async def get_deployment_clients(self, deployment_id: str) -> list[DeploymentClientStatus]:
         conn = self._db.conn
         cursor = await conn.execute(
             """SELECT * FROM deployment_clients
@@ -465,9 +475,7 @@ class FleetStateStore:
             )
         return result
 
-    async def update_client_deployed_version(
-        self, client_name: str, version: str
-    ) -> None:
+    async def update_client_deployed_version(self, client_name: str, version: str) -> None:
         conn = self._db.conn
         now = datetime.now().isoformat()
         await conn.execute(

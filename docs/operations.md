@@ -365,3 +365,49 @@ The built image includes:
 | `--fleet-token TOKEN` | API bearer token |
 | `--version VERSION` | Version string |
 | `--install-dir DIR` | Install directory on Pi (default: `/opt/master_control`) |
+
+## mDNS/Zeroconf Discovery
+
+On local networks, you can use mDNS to automatically discover fleet nodes instead of maintaining static configuration. When enabled, the central API advertises itself so clients find it without a `central_api_url`, and clients advertise themselves so the central discovers new nodes without editing `inventory.yaml`.
+
+### Enabling mDNS
+
+**Control host** (`daemon.yaml`):
+
+```yaml
+central:
+  enabled: true
+  mdns_enabled: true
+  # Clients will be auto-discovered — no inventory needed for monitoring
+```
+
+**Client** (`daemon.yaml`):
+
+```yaml
+fleet:
+  enabled: true
+  client_name: "sensor-node-1"
+  mdns_enabled: true
+  # central_api_url is not needed — discovered via mDNS
+```
+
+### How It Works
+
+1. **Central advertises** `_mctl-central._tcp.local.` on the local network with its API port
+2. **Clients advertise** `_mctl-client._tcp.local.` with their name, port, and version
+3. Clients discover the central API automatically and begin sending heartbeats
+4. The central discovers clients and registers them with status `"discovered"` until their first heartbeat arrives
+5. Static configuration (`central_api_url`, `inventory.yaml`) always takes priority over mDNS
+
+### Requirements
+
+- The `zeroconf` Python package (included in the `api` dependency group)
+- All nodes must be on the same local network (mDNS is link-local and does not cross routers)
+
+### Fallback Behavior
+
+mDNS works alongside static configuration:
+
+- If `central_api_url` is set, the client uses it directly and skips mDNS discovery of the central
+- If `inventory.yaml` exists, it is still used for SSH-based deployments (mDNS only adds monitoring discovery)
+- If `zeroconf` is not installed, mDNS features are silently skipped with a log warning
