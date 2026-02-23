@@ -13,6 +13,20 @@ cd master_control
 make install
 ```
 
+### Pre-baked SD Card Images (Raspberry Pi)
+
+For Pi fleets, you can build SD card images with Master Control pre-installed:
+
+```bash
+sudo ./scripts/build-image.sh \
+    --image raspios-bookworm-arm64-lite.img.xz \
+    --hostname sensor-node-1 \
+    --ssh-key ~/.ssh/id_ed25519.pub \
+    --fleet-url "http://control-host:8080"
+```
+
+Flash the output image, boot the Pi, and it will automatically install dependencies and start the daemon. See the [Operations Guide](operations.md#sd-card-imaging) for full options.
+
 ### Your First Workload
 
 Create a workload config file in `configs/`:

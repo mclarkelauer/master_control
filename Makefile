@@ -1,5 +1,6 @@
 .PHONY: install start stop restart status logs test lint validate clean help \
-       setup setup-local deploy deploy-client deploy-dry-run deploy-sync
+       setup setup-local deploy deploy-client deploy-dry-run deploy-sync \
+       build-image
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -55,3 +56,8 @@ deploy-dry-run: ## Show what deployment would do without doing it
 
 deploy-sync: ## Sync files and configs to clients without restarting
 	@bash scripts/deploy-clients.sh --sync-only
+
+# --- SD Card Imaging ---
+
+build-image: ## Build a pre-baked Pi image: make build-image IMAGE=raspios.img.xz HOSTNAME=node-1
+	@sudo bash scripts/build-image.sh --image $(IMAGE) --hostname $(HOSTNAME) $(EXTRA_ARGS)

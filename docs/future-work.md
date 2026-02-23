@@ -44,7 +44,7 @@ Implemented in `fleet/deployer.py`. Current capabilities:
 - **Bandwidth awareness**: Throttle log shipping and telemetry on metered connections (cellular, satellite).
 
 ### Provisioning
-- **SD card imaging**: Pre-baked OS images with Master Control pre-installed, reducing first-deploy time.
+- ~~**SD card imaging**: Pre-baked OS images with Master Control pre-installed, reducing first-deploy time.~~ **Done** — `scripts/build-image.sh` takes a stock Raspberry Pi OS image, injects Master Control and a first-boot systemd service, and outputs a flashable `.img`.
 - **mDNS/Zeroconf discovery**: Auto-discover new clients on the local network instead of manually editing inventory.
 - **USB bootstrap**: For air-gapped networks, support provisioning via USB drive.
 

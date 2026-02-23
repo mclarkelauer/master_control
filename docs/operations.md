@@ -261,3 +261,95 @@ curl "http://control-host:8080/api/fleet/clients/sensor-node-1/workloads/data_co
 - Ensure the daemon is running
 - Check the socket path matches between CLI and daemon (default: `/tmp/master_control.sock`)
 - Verify file permissions on the socket file
+
+## SD Card Imaging
+
+For Raspberry Pi deployments, you can build pre-baked SD card images that include Master Control and all configuration. The Pi will automatically install dependencies and start the daemon on its first boot.
+
+### Prerequisites
+
+- Linux host with `sudo`, `losetup`, `rsync`, and `xz` (for compressed images)
+- A base Raspberry Pi OS Lite image (`.img` or `.img.xz`)
+
+### Basic Usage
+
+```bash
+sudo ./scripts/build-image.sh \
+    --image 2024-11-19-raspios-bookworm-arm64-lite.img.xz \
+    --hostname sensor-node-1 \
+    --ssh-key ~/.ssh/id_ed25519.pub
+```
+
+This produces `mctl-sensor-node-1.img` — flash it to an SD card:
+
+```bash
+sudo dd if=mctl-sensor-node-1.img of=/dev/sdX bs=4M status=progress
+```
+
+### With WiFi and Fleet Configuration
+
+```bash
+sudo ./scripts/build-image.sh \
+    --image raspios-bookworm-arm64-lite.img.xz \
+    --hostname sensor-node-1 \
+    --ssh-key ~/.ssh/id_ed25519.pub \
+    --wifi-ssid "MyNetwork" \
+    --wifi-password "secret" \
+    --fleet-url "http://control-host:8080" \
+    --fleet-token "your-secret-token" \
+    --version "1.3.0"
+```
+
+### With Inventory-Based Client Configuration
+
+Pull workload configs and environment overrides from your inventory file:
+
+```bash
+sudo ./scripts/build-image.sh \
+    --image raspios-bookworm-arm64-lite.img.xz \
+    --hostname sensor-node-1 \
+    --ssh-key ~/.ssh/id_ed25519.pub \
+    --inventory inventory.yaml \
+    --client sensor-node-1
+```
+
+### Makefile Shortcut
+
+```bash
+make build-image IMAGE=raspios.img.xz HOSTNAME=sensor-node-1
+```
+
+Pass additional flags via `EXTRA_ARGS`:
+
+```bash
+make build-image IMAGE=raspios.img.xz HOSTNAME=node-1 \
+    EXTRA_ARGS="--ssh-key ~/.ssh/id_ed25519.pub --fleet-url http://host:8080"
+```
+
+### What Happens on First Boot
+
+1. The Pi boots with SSH enabled and the configured hostname
+2. The `mctl-first-boot` systemd service starts (after network is online)
+3. It installs Python 3.12+, uv, and project dependencies
+4. Validates workload configs and starts the daemon
+5. Removes the first-boot sentinel so the service never runs again
+6. Full log available at `/opt/master_control/logs/first-boot.log`
+
+### Options Reference
+
+| Option | Description |
+|--------|-------------|
+| `--image FILE` | Base Raspberry Pi OS image (required) |
+| `--output FILE` | Output path (default: `mctl-<hostname>.img`) |
+| `--hostname NAME` | Pi hostname (default: `mctl-node`) |
+| `--ssh-key FILE` | SSH public key to authorize |
+| `--wifi-ssid SSID` | Pre-configure WiFi |
+| `--wifi-password PASS` | WiFi password |
+| `--wifi-country CC` | WiFi country code (default: `US`) |
+| `--inventory FILE` | Inventory file for client-specific config |
+| `--client NAME` | Client name from inventory |
+| `--configs DIR` | Workload configs directory to embed |
+| `--fleet-url URL` | Central API URL for fleet heartbeat |
+| `--fleet-token TOKEN` | API bearer token |
+| `--version VERSION` | Version string |
+| `--install-dir DIR` | Install directory on Pi (default: `/opt/master_control`) |

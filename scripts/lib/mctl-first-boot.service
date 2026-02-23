@@ -1,0 +1,16 @@
+[Unit]
+Description=Master Control first-boot setup
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/master_control/.mctl-first-boot
+
+[Service]
+Type=oneshot
+ExecStart=/opt/master_control/scripts/lib/mctl-first-boot.sh
+RemainAfterExit=no
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

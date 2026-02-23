@@ -192,6 +192,7 @@ make test             Run all tests
 make lint             Run ruff linter
 make validate         Validate workload configs
 make clean            Remove runtime artifacts
+make build-image      Build a pre-baked Pi SD card image
 ```
 
 ## Deployment
