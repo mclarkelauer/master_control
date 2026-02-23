@@ -1,31 +1,34 @@
 # Future Work
 
-Planned enhancements and areas of investigation for Master Control, organized by priority and scope.
+Planned enhancements and areas of investigation for Master Control, organized by priority and scope. Items marked ~~strikethrough~~ have been implemented.
 
 ## Fleet Management
 
-### Central Dashboard / API
-The control host currently only deploys — it has no runtime visibility into clients. A central API and web dashboard would provide:
+### ~~Central Dashboard / API~~ Done
+
+Implemented in `api/central_app.py`, `api/central_routes.py`, and `api/web_routes.py`. The control host runs a FastAPI-based central API and Jinja2 web dashboard providing:
 - Aggregated workload status across all clients.
 - Remote start/stop/restart of workloads on specific clients.
-- Fleet-wide health overview with alerting.
+- Fleet-wide health overview.
 
-The FastAPI dependency is already optional in `pyproject.toml` as a starting point.
+### ~~Client Heartbeating~~ Done
 
-### Client Heartbeating
-Clients should periodically report status back to the control host. This enables:
-- Detection of offline/unreachable clients.
-- Centralized log and metric collection.
-- Automatic alerting when a client goes dark.
+Implemented in `fleet/heartbeat.py`. Clients periodically POST status to the central API via HTTP, including:
+- Workload states and system metrics (CPU, memory, disk).
+- Detection of offline/stale clients via configurable `stale_threshold_seconds`.
 
-Options: lightweight HTTP POST, MQTT (well-suited for constrained devices), or a simple UDP beacon.
+### ~~OTA Updates and Rolling Deploys~~ Done (partial)
 
-### OTA Updates and Rolling Deploys
-Currently deployment is all-or-nothing. Future improvements:
-- Rolling deploys that update clients in batches with health checks between batches.
-- Automatic rollback if a client fails health checks after deployment.
-- Delta syncs to minimize bandwidth on slow or metered connections (rsync already handles this partially).
-- Version pinning per client to support canary deployments.
+Implemented in `fleet/deployer.py`. Current capabilities:
+- ~~Rolling deploys that update clients in batches with health checks between batches.~~
+- ~~Automatic rollback if a client fails health checks after deployment.~~
+- ~~Version pinning per client to support canary deployments.~~
+- **Remaining**: Delta syncs to minimize bandwidth on slow or metered connections (rsync already handles this partially).
+
+### Fleet Alerting
+- Webhook or email notifications when clients go offline or workloads fail.
+- Configurable alert rules (per workload, per client, fleet-wide).
+- Integration with PagerDuty, Slack, or generic webhook endpoints.
 
 ## Raspberry Pi / SBC Optimizations
 
@@ -59,7 +62,7 @@ Some workloads depend on others (e.g., a service must be running before a script
 - Namespace isolation using Linux namespaces for network and filesystem.
 
 ### Workload Versioning
-- Track which version of a workload is deployed to which client.
+- ~~Track which version of a workload is deployed to which client.~~ **Done** — `version` field on WorkloadSpec, `deployed_version` tracked per client in the fleet database.
 - Support running multiple versions simultaneously (blue/green).
 - Rollback to a previous workload version independently of the full deploy.
 
