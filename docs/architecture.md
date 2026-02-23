@@ -79,6 +79,7 @@ When the daemon starts (`master-control up`), it initializes these components:
 **Runner** (`engine/runner.py`)
 - One runner per workload. Manages the subprocess lifecycle.
 - Spawns the workload as a child process, tracks PID, run count, timestamps, errors.
+- Applies resource limits (`memory_limit_mb`, `cpu_nice`) via a `preexec_fn` on the child process (see `engine/rlimits.py`).
 - Applies the run mode strategy (forever, n_times, schedule) to decide whether to restart.
 - Graceful shutdown: SIGTERM with timeout, then SIGKILL.
 
@@ -91,6 +92,7 @@ When the daemon starts (`master-control up`), it initializes these components:
 - Periodically polls running workloads.
 - Verifies process existence via `os.kill(pid, 0)`.
 - Marks workloads as `FAILED` if their process has disappeared.
+- Monitors RSS memory usage and warns when a workload approaches its `memory_limit_mb` (90% threshold, requires `psutil`).
 
 **IPC Server** (`engine/orchestrator.py` + `engine/ipc.py`)
 - Unix domain socket accepting JSON commands from the CLI.
@@ -116,7 +118,10 @@ WorkloadSpec (immutable, from YAML)
 ├── max_runs: int            # Run limit (n_times mode)
 ├── timeout: int             # Max execution seconds
 ├── restart_delay: int       # Seconds between restarts
-└── tags: list[str]
+├── memory_limit_mb: int     # Address space limit (RLIMIT_AS)
+├── cpu_nice: int            # CPU scheduling priority (-20..19)
+├── tags: list[str]
+└── version: str
 
 WorkloadState (mutable, runtime)
 ├── name: str

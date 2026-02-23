@@ -30,8 +30,8 @@ Currently deployment is all-or-nothing. Future improvements:
 ## Raspberry Pi / SBC Optimizations
 
 ### Resource Constraints
-- **Memory limits**: Add configurable memory caps per workload (`cgroup` or `ulimit`). Kill workloads that exceed their allocation.
-- **CPU throttling**: Assign CPU affinity or nice values to prevent a runaway workload from starving others.
+- ~~**Memory limits**: Add configurable memory caps per workload (`cgroup` or `ulimit`). Kill workloads that exceed their allocation.~~ **Done** — `memory_limit_mb` sets `RLIMIT_AS` per workload; health checker warns at 90% RSS usage.
+- ~~**CPU throttling**: Assign CPU affinity or nice values to prevent a runaway workload from starving others.~~ **Done** — `cpu_nice` adjusts scheduling priority per workload.
 - **Storage monitoring**: Watch available disk space and pause/alert before SD cards fill up. SQLite WAL mode should be evaluated for write amplification on flash storage.
 - **Temperature monitoring**: Read SoC temperature (`/sys/class/thermal/`) and throttle workloads when thermal limits approach.
 
