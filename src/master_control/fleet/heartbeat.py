@@ -90,7 +90,7 @@ class HeartbeatReporter:
             workloads=[
                 WorkloadInfo(
                     name=s.spec.name,
-                    type=s.spec.workload_type.value,
+                    type=s.spec.workload_type,
                     run_mode=s.spec.run_mode.value,
                     status=s.status.value,
                     pid=s.pid,

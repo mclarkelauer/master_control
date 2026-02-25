@@ -72,14 +72,17 @@ class TestWorkloadConfig:
                 module="agents.test",
             )
 
-    def test_invalid_type_raises(self) -> None:
-        with pytest.raises(ValidationError):
-            WorkloadConfig(
-                name="bad",
-                type="invalid",
-                run_mode="forever",
-                module="agents.test",
-            )
+    def test_custom_type_accepted(self) -> None:
+        """Custom workload types are accepted at the schema level
+        (validated against plugin registry at orchestrator startup)."""
+        config = WorkloadConfig(
+            name="custom_wl",
+            type="container",
+            run_mode="forever",
+            module="agents.test",
+        )
+        spec = config.to_spec()
+        assert spec.workload_type == "container"
 
     def test_params_and_tags(self) -> None:
         config = WorkloadConfig(

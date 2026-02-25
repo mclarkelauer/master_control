@@ -17,6 +17,7 @@ from master_control.engine.scheduler import ScheduleManager
 from master_control.health.checks import HealthChecker
 from master_control.logging_config import configure_logging
 from master_control.models.workload import RunMode, WorkloadState, WorkloadStatus
+from master_control.plugins.registry import PluginRegistry
 
 log = structlog.get_logger()
 
@@ -44,6 +45,7 @@ class Orchestrator:
         self._scheduler = ScheduleManager()
         self._runners: dict[str, WorkloadRunner] = {}
         self._health_checker = HealthChecker(self)
+        self._plugin_registry = PluginRegistry()
         self._ipc_server: asyncio.Server | None = None
         self._http_server = None
         self._http_task: asyncio.Task | None = None
@@ -75,6 +77,9 @@ class Orchestrator:
         version_file = self.config_dir.parent / ".mctl-version"
         if version_file.exists():
             self._deployed_version = version_file.read_text().strip() or None
+
+        # Discover plugins
+        self._plugin_registry.discover()
 
         # Load configs
         loader = ConfigLoader(self.config_dir)
@@ -253,7 +258,10 @@ class Orchestrator:
                 status=WorkloadStatus.STARTING,
             )
 
-        runner = WorkloadRunner(spec, self._run_history, self.log_dir)
+        type_plugin = self._plugin_registry.get_workload_type(spec.workload_type)
+        runner = WorkloadRunner(
+            spec, self._run_history, self.log_dir, type_plugin=type_plugin
+        )
         self._runners[name] = runner
 
         if spec.run_mode == RunMode.SCHEDULE:
@@ -274,7 +282,10 @@ class Orchestrator:
             log.warning("skipping scheduled run, still running", workload=name)
             return
         spec = self._registry.get(name)
-        runner = WorkloadRunner(spec, self._run_history, self.log_dir)
+        type_plugin = self._plugin_registry.get_workload_type(spec.workload_type)
+        runner = WorkloadRunner(
+            spec, self._run_history, self.log_dir, type_plugin=type_plugin
+        )
         self._runners[name] = runner
         await runner.start()
 
@@ -440,7 +451,7 @@ class Orchestrator:
                 "workloads": [
                     {
                         "name": s.spec.name,
-                        "type": s.spec.workload_type.value,
+                        "type": s.spec.workload_type,
                         "run_mode": s.spec.run_mode.value,
                         "status": s.status.value,
                         "pid": s.pid,
@@ -458,7 +469,7 @@ class Orchestrator:
                 return {"error": f"Unknown workload: {name}"}
             return {
                 "name": state.spec.name,
-                "type": state.spec.workload_type.value,
+                "type": state.spec.workload_type,
                 "run_mode": state.spec.run_mode.value,
                 "status": state.status.value,
                 "pid": state.pid,

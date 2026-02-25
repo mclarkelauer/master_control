@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from master_control.models.workload import RunMode, WorkloadSpec, WorkloadType
+from master_control.models.workload import RunMode, WorkloadSpec
 
 
 class FleetConfig(BaseModel):
@@ -45,7 +45,7 @@ class WorkloadConfig(BaseModel):
     """Pydantic model for validating a single workload YAML definition."""
 
     name: str
-    type: Literal["agent", "script", "service"]
+    type: str
     run_mode: Literal["schedule", "forever", "n_times"]
     module: str
     version: str | None = None
@@ -84,7 +84,7 @@ class WorkloadConfig(BaseModel):
     def to_spec(self) -> WorkloadSpec:
         return WorkloadSpec(
             name=self.name,
-            workload_type=WorkloadType(self.type),
+            workload_type=self.type,
             run_mode=RunMode(self.run_mode),
             module_path=self.module,
             entry_point=self.entry_point,

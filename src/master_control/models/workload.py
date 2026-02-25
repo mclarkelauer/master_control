@@ -31,7 +31,7 @@ class WorkloadSpec:
     """Immutable specification loaded from YAML config."""
 
     name: str
-    workload_type: WorkloadType
+    workload_type: str  # Built-in: "agent", "script", "service"; extensible via plugins
     run_mode: RunMode
     module_path: str
     entry_point: str = "run"
@@ -63,7 +63,7 @@ class WorkloadState:
         """Serialize to a dict suitable for JSON/API responses."""
         return {
             "name": self.spec.name,
-            "type": self.spec.workload_type.value,
+            "type": self.spec.workload_type,
             "run_mode": self.spec.run_mode.value,
             "status": self.status.value,
             "pid": self.pid,

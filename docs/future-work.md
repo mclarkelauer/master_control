@@ -104,9 +104,10 @@ Some workloads depend on others (e.g., a service must be running before a script
 
 ## Developer Experience
 
-### Plugin System
-- Allow third-party workload types beyond agent/script/service.
-- Hook points for custom health checks, metrics exporters, and log processors.
+### ~~Plugin System~~ Done
+~~Allow third-party workload types beyond agent/script/service.~~
+~~Hook points for custom health checks, metrics exporters, and log processors.~~
+Implemented in `plugins/`. Three protocol-based extension points (`WorkloadTypePlugin`, `HealthCheckPlugin`, `LogProcessorPlugin`) discovered via Python entry points. Custom workload types can provide their own launch commands. The `type` field in workload YAML now accepts any string — built-in types work unchanged, custom types are dispatched to plugins.
 
 ### ~~Config Templating~~ Done
 ~~Jinja2 or similar templating in workload YAML for per-client variable substitution.~~

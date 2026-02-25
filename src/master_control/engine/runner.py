@@ -27,10 +27,12 @@ class WorkloadRunner:
         spec: WorkloadSpec,
         run_history: RunHistoryRepo,
         log_dir: Path | None = None,
+        type_plugin: object | None = None,
     ) -> None:
         self.spec = spec
         self._run_history = run_history
         self._log_dir = log_dir
+        self._type_plugin = type_plugin
         self._strategy: RunModeStrategy = get_strategy(spec.run_mode)
         self._state = WorkloadState(spec=spec)
         self._process: asyncio.subprocess.Process | None = None
@@ -83,21 +85,29 @@ class WorkloadRunner:
 
     async def _launch_process(self) -> asyncio.subprocess.Process:
         """Launch the worker subprocess."""
-        cmd = [
-            sys.executable,
-            "-m",
-            "master_control.engine._worker",
-            "--module",
-            self.spec.module_path,
-            "--entry-point",
-            self.spec.entry_point,
-            "--params-json",
-            json.dumps(self.spec.params),
-            "--workload-name",
-            self.spec.name,
-        ]
+        # Check if a plugin provides a custom launch command.
+        plugin_cmd: list[str] = []
+        if self._type_plugin and hasattr(self._type_plugin, "build_launch_command"):
+            plugin_cmd = self._type_plugin.build_launch_command(self.spec)
 
-        if self._log_dir:
+        if plugin_cmd:
+            cmd = plugin_cmd
+        else:
+            cmd = [
+                sys.executable,
+                "-m",
+                "master_control.engine._worker",
+                "--module",
+                self.spec.module_path,
+                "--entry-point",
+                self.spec.entry_point,
+                "--params-json",
+                json.dumps(self.spec.params),
+                "--workload-name",
+                self.spec.name,
+            ]
+
+        if self._log_dir and not plugin_cmd:
             log_file = self._log_dir / f"{self.spec.name}.log"
             cmd.extend(["--log-file", str(log_file)])
 
