@@ -346,3 +346,95 @@ def run_workload(ctx: click.Context, name: str) -> None:
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise SystemExit(1)
+
+
+@cli.command("exec")
+@click.argument("name")
+@click.argument("command", nargs=-1, required=True)
+@click.option("--timeout", default=30.0, help="Command timeout in seconds")
+@click.pass_context
+def exec_cmd(ctx: click.Context, name: str, command: tuple[str, ...], timeout: float) -> None:
+    """Run a command in a workload's environment."""
+    socket_path = _get_socket_path(ctx)
+
+    async def run() -> None:
+        try:
+            response = await send_command(
+                {
+                    "command": "exec",
+                    "name": name,
+                    "exec_command": list(command),
+                    "timeout": timeout,
+                },
+                socket_path=socket_path,
+            )
+        except IPCError as e:
+            console.print(f"[red]{e}[/red]")
+            raise SystemExit(1)
+
+        if "error" in response:
+            console.print(f"[red]{response['error']}[/red]")
+            raise SystemExit(1)
+
+        stdout = response.get("stdout", "")
+        stderr = response.get("stderr", "")
+        exit_code = response.get("exit_code", 0)
+
+        if stdout:
+            console.print(stdout, end="")
+        if stderr:
+            console.print(f"[red]{stderr}[/red]", end="")
+
+        raise SystemExit(exit_code)
+
+    _run_async(run())
+
+
+@cli.command()
+@click.argument("name")
+@click.pass_context
+def shell(ctx: click.Context, name: str) -> None:
+    """Open an interactive Python shell in a workload's environment."""
+    import os
+
+    socket_path = _get_socket_path(ctx)
+
+    async def get_env() -> dict:
+        try:
+            return await send_command(
+                {"command": "workload_env", "name": name},
+                socket_path=socket_path,
+            )
+        except IPCError as e:
+            console.print(f"[red]{e}[/red]")
+            raise SystemExit(1)
+
+    response = _run_async(get_env())
+
+    if "error" in response:
+        console.print(f"[red]{response['error']}[/red]")
+        raise SystemExit(1)
+
+    env = response.get("env", {})
+    module = response.get("module", "")
+    entry_point = response.get("entry_point", "run")
+
+    console.print(f"Opening shell for [cyan]{name}[/cyan] (module: {module})")
+    console.print("The workload module is pre-imported as [cyan]_mod[/cyan].")
+
+    import json
+
+    params_json = json.dumps(response.get("params", {}))
+    startup_code = (
+        f"import {module} as _mod; "
+        f"print('Loaded module: {module}'); "
+        f"print('Entry point: {entry_point}'); "
+        f"print('Params: {params_json}'); "
+        f"print('---')"
+    )
+
+    os.execvpe(
+        sys.executable,
+        [sys.executable, "-i", "-c", startup_code],
+        env,
+    )

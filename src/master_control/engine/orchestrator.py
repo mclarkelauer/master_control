@@ -500,6 +500,35 @@ class Orchestrator:
             result = await self.reload_configs()
             return {"changes": result}
 
+        if cmd == "exec" and name:
+            if name not in self._registry:
+                return {"error": f"Unknown workload: {name}"}
+            spec = self._registry.get(name)
+            exec_command = request.get("exec_command", [])
+            if not exec_command:
+                return {"error": "No command specified"}
+            from master_control.engine.debug import exec_in_workload_env
+
+            exec_timeout = request.get("timeout", 30.0)
+            stdout, stderr, exit_code = await exec_in_workload_env(
+                spec, exec_command, exec_timeout
+            )
+            return {"stdout": stdout, "stderr": stderr, "exit_code": exit_code}
+
+        if cmd == "workload_env" and name:
+            if name not in self._registry:
+                return {"error": f"Unknown workload: {name}"}
+            spec = self._registry.get(name)
+            from master_control.engine.debug import build_workload_env
+
+            env = build_workload_env(spec)
+            return {
+                "env": env,
+                "module": spec.module_path,
+                "entry_point": spec.entry_point,
+                "params": spec.params,
+            }
+
         if cmd == "shutdown":
             asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.shutdown()))
             return {"message": "Shutting down"}

@@ -119,7 +119,9 @@ Implemented in `config/templating.py`. Workload YAML files support Jinja2 `{{ va
 - Docker Compose or VM-based test harness that mimics a Pi fleet.
 - Chaos testing: randomly kill workloads, disconnect networks, fill disks.
 
-### Interactive Debugging
-- `master-control shell <name>`: Attach to a running workload's stdin/stdout.
-- `master-control exec <name> <command>`: Run a one-off command in a workload's environment.
-- Remote REPL for live debugging on constrained devices.
+### ~~Interactive Debugging~~ Done
+
+Implemented in `engine/debug.py` and `cli/main.py`. Two new CLI commands:
+- `master-control exec <name> <command>`: Run a one-off command in a workload's environment (module path, params, env vars all set). Executes via IPC on the daemon side and returns stdout/stderr/exit code.
+- `master-control shell <name>`: Open an interactive Python REPL with the workload's module pre-imported and all environment variables set. Runs locally via `os.execvpe()`.
+- **Remaining**: Remote REPL for live debugging on constrained devices (requires SSH tunneling or WebSocket transport).

@@ -462,3 +462,38 @@ These are available in all workload configs loaded from the same directory. Inli
 - Undefined variables raise a `ConfigError` with the variable name and file path
 - Jinja2 filters are supported: `{{ name | upper }}`, `{{ items | join(',') }}`, etc.
 - `vars.yaml` and `vars.yml` are automatically skipped by `load_all()` and are not treated as workload configs
+
+## Interactive Debugging
+
+Two CLI commands let you inspect and debug workloads without modifying their configuration.
+
+### Exec — Run a Command in a Workload's Environment
+
+```bash
+uv run master-control exec <workload-name> -- python -c "import os; print(os.environ['MCTL_WORKLOAD_NAME'])"
+```
+
+This runs a one-off command with the workload's full environment set up:
+- `MCTL_WORKLOAD_NAME`, `MCTL_WORKLOAD_TYPE`, `MCTL_MODULE_PATH`, `MCTL_ENTRY_POINT`
+- `MCTL_PARAMS_JSON` — the workload's params as a JSON string
+- `PYTHONPATH` includes the project root
+
+The command executes on the daemon side via IPC. stdout and stderr are captured and printed, and the CLI exits with the command's exit code.
+
+Options:
+- `--timeout SECONDS` — kill the command after this many seconds (default: 30)
+
+### Shell — Interactive Python REPL
+
+```bash
+uv run master-control shell <workload-name>
+```
+
+Opens an interactive Python session with:
+- The workload's module pre-imported (e.g., `import agents.examples.hello_agent`)
+- All `MCTL_*` environment variables set
+- `PYTHONPATH` configured so project imports work
+
+This is useful for testing functions, inspecting module state, or experimenting with a workload's code in the same environment the daemon uses.
+
+The shell replaces the current process (`os.execvpe()`), so it behaves like a normal Python REPL — use `Ctrl-D` or `exit()` to quit.
