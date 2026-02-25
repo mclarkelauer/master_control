@@ -1,0 +1,16 @@
+vars:
+  api_host: api.example.com
+  batch_size: 100
+
+name: templated_collector
+type: agent
+run_mode: schedule
+schedule: "*/5 * * * *"
+module: agents.examples.hello_agent
+entry_point: run
+params:
+  source_url: "https://{{ api_host }}/data"
+  batch_size: {{ batch_size }}
+timeout: 300
+tags:
+  - data

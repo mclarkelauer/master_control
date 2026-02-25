@@ -411,3 +411,54 @@ mDNS works alongside static configuration:
 - If `central_api_url` is set, the client uses it directly and skips mDNS discovery of the central
 - If `inventory.yaml` exists, it is still used for SSH-based deployments (mDNS only adds monitoring discovery)
 - If `zeroconf` is not installed, mDNS features are silently skipped with a log warning
+
+## Config Templating
+
+Workload YAML files support Jinja2 template syntax for variable substitution. This is useful for deploying the same workload config to multiple clients with different parameters.
+
+### Variable Sources
+
+Variables are resolved in this priority order (highest first):
+
+1. **Inline `vars:` block** at the top of the YAML file — self-contained defaults
+2. **Shared `vars.yaml`** (or `vars.yml`) in the config directory — shared across all configs
+3. **OS environment** via `{{ env.VAR_NAME }}`
+
+### Example
+
+```yaml
+vars:
+  api_host: api.example.com
+  batch_size: 100
+
+name: data_collector
+type: agent
+run_mode: schedule
+schedule: "*/5 * * * *"
+module: agents.examples.hello_agent
+params:
+  source_url: "https://{{ api_host }}/data"
+  batch_size: {{ batch_size }}
+  deploy_host: "{{ env.HOSTNAME }}"
+```
+
+The `vars:` block is stripped before validation — it is not part of the workload config schema.
+
+### Shared Variables File
+
+Place a `vars.yaml` in your config directory to share variables across all workload configs:
+
+```yaml
+# configs/vars.yaml
+api_host: api.production.com
+log_level: INFO
+```
+
+These are available in all workload configs loaded from the same directory. Inline `vars:` blocks in individual files override shared values.
+
+### Behaviour
+
+- Files **without** `{{` or `{%` syntax are loaded as plain YAML (no performance overhead)
+- Undefined variables raise a `ConfigError` with the variable name and file path
+- Jinja2 filters are supported: `{{ name | upper }}`, `{{ items | join(',') }}`, etc.
+- `vars.yaml` and `vars.yml` are automatically skipped by `load_all()` and are not treated as workload configs

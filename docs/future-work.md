@@ -108,9 +108,10 @@ Some workloads depend on others (e.g., a service must be running before a script
 - Allow third-party workload types beyond agent/script/service.
 - Hook points for custom health checks, metrics exporters, and log processors.
 
-### Config Templating
-- Jinja2 or similar templating in workload YAML for per-client variable substitution.
-- Reduce inventory duplication when many clients run similar configs with different parameters.
+### ~~Config Templating~~ Done
+~~Jinja2 or similar templating in workload YAML for per-client variable substitution.~~
+~~Reduce inventory duplication when many clients run similar configs with different parameters.~~
+Implemented in `config/templating.py`. Workload YAML files support Jinja2 `{{ var }}` syntax with variables from inline `vars:` blocks, shared `vars.yaml`, and OS environment (`{{ env.VAR }}`). Non-templated configs pass through unchanged.
 
 ### Testing & Simulation
 - Local multi-client simulation for testing deployment scripts without hardware.

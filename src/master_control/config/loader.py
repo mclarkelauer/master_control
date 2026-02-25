@@ -25,6 +25,7 @@ class ConfigLoader:
     """Reads YAML config files from a directory, validates them, and returns WorkloadSpecs."""
 
     DAEMON_CONFIG_NAMES = {"daemon.yaml", "daemon.yml"}
+    SKIP_NAMES = {"inventory.yaml", "inventory.yml", "vars.yaml", "vars.yml"}
 
     def __init__(self, config_dir: Path) -> None:
         self.config_dir = config_dir
@@ -43,23 +44,33 @@ class ConfigLoader:
                 continue
             if path.name in self.DAEMON_CONFIG_NAMES:
                 continue
-            if path.name in ("inventory.yaml", "inventory.yml"):
+            if path.name in self.SKIP_NAMES:
                 continue
             specs.extend(self.load_file(path))
         return specs
 
     def load_file(self, path: Path) -> list[WorkloadSpec]:
-        """Load and validate a single YAML config file. Returns one or more WorkloadSpecs."""
-        try:
-            raw = yaml.safe_load(path.read_text())
-        except yaml.YAMLError as e:
-            raise ConfigError(path, f"Invalid YAML: {e}") from e
+        """Load and validate a single YAML config file. Returns one or more WorkloadSpecs.
+
+        Files containing Jinja2 syntax (``{{`` / ``{%``) are rendered as
+        templates before YAML parsing.  Variable context comes from:
+          1. OS environment (``{{ env.VAR }}``)
+          2. Shared ``vars.yaml`` in the config directory
+          3. Inline ``vars:`` block at the top of the file
+        """
+        raw_text = path.read_text()
+        raw = self._parse_yaml(path, raw_text)
 
         if raw is None:
             return []
 
         if not isinstance(raw, dict):
             raise ConfigError(path, "Expected a YAML mapping at top level")
+
+        # Strip inline vars before Pydantic validation.
+        from master_control.config.templating import extract_inline_vars
+
+        _, raw = extract_inline_vars(raw)
 
         try:
             if "workloads" in raw:
@@ -70,6 +81,32 @@ class ConfigLoader:
                 return [single.to_spec()]
         except ValidationError as e:
             raise ConfigError(path, f"Validation error: {e}") from e
+
+    def _parse_yaml(self, path: Path, raw_text: str) -> dict | list | None:
+        """Parse YAML, rendering Jinja2 templates first if needed."""
+        from master_control.config.templating import (
+            extract_vars_from_text,
+            has_template_syntax,
+            load_vars_file,
+            render_template,
+        )
+
+        if has_template_syntax(raw_text):
+            # Extract inline vars from raw text (works even when the rest
+            # of the file is not valid YAML due to template expressions).
+            shared_vars = load_vars_file(self.config_dir)
+            inline_vars = extract_vars_from_text(raw_text)
+
+            context = {**shared_vars, **inline_vars}
+            try:
+                raw_text = render_template(raw_text, context=context)
+            except Exception as e:
+                raise ConfigError(path, f"Template error: {e}") from e
+
+        try:
+            return yaml.safe_load(raw_text)
+        except yaml.YAMLError as e:
+            raise ConfigError(path, f"Invalid YAML: {e}") from e
 
     def load_daemon_config(self) -> DaemonConfig:
         """Load daemon.yaml from the config directory. Returns defaults if not found."""
