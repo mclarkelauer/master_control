@@ -1,0 +1,7 @@
+name: hello_agent
+type: agent
+run_mode: forever
+module: agents.examples.hello_agent
+entry_point: run
+params:
+  greeting: "Hello from simulation"

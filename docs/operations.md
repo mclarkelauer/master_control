@@ -497,3 +497,86 @@ Opens an interactive Python session with:
 This is useful for testing functions, inspecting module state, or experimenting with a workload's code in the same environment the daemon uses.
 
 The shell replaces the current process (`os.execvpe()`), so it behaves like a normal Python REPL — use `Ctrl-D` or `exit()` to quit.
+
+## Fleet Simulation
+
+A Docker Compose-based simulation lets you test fleet management features locally without hardware. It spins up a central API container and multiple client containers on the same network.
+
+### Prerequisites
+
+- Docker and Docker Compose (v2+)
+- Optional: `docker` Python package for programmatic access (`sim` dependency group)
+
+### Starting a Simulation
+
+```bash
+# Start with 3 simulated clients (default)
+uv run master-control simulate up
+
+# Start with 5 clients
+uv run master-control simulate up --clients 5
+
+# Use a custom compose file
+uv run master-control simulate up --compose-file path/to/compose.yaml
+```
+
+### Checking Status
+
+```bash
+uv run master-control simulate status
+```
+
+### Viewing Logs
+
+```bash
+# All services
+uv run master-control simulate logs
+
+# Central only
+uv run master-control simulate logs --service central
+
+# Last 100 lines
+uv run master-control simulate logs --tail 100
+```
+
+### Tearing Down
+
+```bash
+uv run master-control simulate down
+
+# Also remove volumes
+uv run master-control simulate down --volumes
+```
+
+### Chaos Testing
+
+Run chaos experiments against the simulated fleet to test resilience:
+
+```bash
+# Random chaos action (kill workload, pause container, or fill disk)
+uv run master-control simulate chaos
+
+# Specific scenario
+uv run master-control simulate chaos --scenario cascade
+uv run master-control simulate chaos --scenario disk_pressure
+```
+
+Available scenarios:
+
+| Scenario | Description |
+|----------|-------------|
+| `random` | Pick one random chaos action |
+| `cascade` | Kill a workload, then pause a different container |
+| `disk_pressure` | Fill disk on a random client container |
+
+### Simulation Files
+
+The simulation is configured in `simulation/`:
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Container image for simulated nodes |
+| `docker-compose.sim.yaml` | Service definitions for central + clients |
+| `configs/central/daemon.yaml` | Central API config |
+| `configs/client/daemon.yaml` | Client fleet config (uses templating) |
+| `configs/client/hello_agent.yaml` | Sample workload for clients |

@@ -114,10 +114,13 @@ Implemented in `plugins/`. Three protocol-based extension points (`WorkloadTypeP
 ~~Reduce inventory duplication when many clients run similar configs with different parameters.~~
 Implemented in `config/templating.py`. Workload YAML files support Jinja2 `{{ var }}` syntax with variables from inline `vars:` blocks, shared `vars.yaml`, and OS environment (`{{ env.VAR }}`). Non-templated configs pass through unchanged.
 
-### Testing & Simulation
-- Local multi-client simulation for testing deployment scripts without hardware.
-- Docker Compose or VM-based test harness that mimics a Pi fleet.
-- Chaos testing: randomly kill workloads, disconnect networks, fill disks.
+### ~~Testing & Simulation~~ Done
+
+Implemented in `testing/simulation.py`, `testing/chaos.py`, and `simulation/`. Provides:
+- ~~Docker Compose-based test harness that simulates a multi-client fleet on one machine.~~
+- ~~Chaos testing module (`ChaosRunner`) for killing workloads, pausing containers (network partition), and simulating disk pressure.~~
+- CLI `master-control simulate` subgroup with `up`, `down`, `status`, `logs`, and `chaos` commands.
+- **Remaining**: VM-based harness for closer-to-hardware testing; more chaos scenarios (CPU stress, clock skew).
 
 ### ~~Interactive Debugging~~ Done
 

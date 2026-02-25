@@ -1,6 +1,6 @@
 .PHONY: install start stop restart status logs test lint validate clean help \
        setup setup-local deploy deploy-client deploy-dry-run deploy-sync \
-       build-image
+       build-image sim-up sim-down sim-status
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -61,3 +61,14 @@ deploy-sync: ## Sync files and configs to clients without restarting
 
 build-image: ## Build a pre-baked Pi image: make build-image IMAGE=raspios.img.xz HOSTNAME=node-1
 	@sudo bash scripts/build-image.sh --image $(IMAGE) --hostname $(HOSTNAME) $(EXTRA_ARGS)
+
+# --- Simulation ---
+
+sim-up: ## Start simulated fleet: make sim-up CLIENTS=3
+	uv run master-control simulate up --clients $(or $(CLIENTS),3)
+
+sim-down: ## Tear down simulated fleet
+	uv run master-control simulate down
+
+sim-status: ## Show simulated fleet status
+	uv run master-control simulate status

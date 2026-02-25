@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+  central:
+    build:
+      context: ..
+      dockerfile: simulation/Dockerfile
+    hostname: mctl-central
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs/central:/app/configs
+    environment:
+      - MCTL_ROLE=central
+    networks:
+      - mctl-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  client:
+    build:
+      context: ..
+      dockerfile: simulation/Dockerfile
+    volumes:
+      - ./configs/client:/app/configs
+    environment:
+      - MCTL_ROLE=client
+      - MCTL_CENTRAL_URL=http://central:8080
+    depends_on:
+      central:
+        condition: service_healthy
+    networks:
+      - mctl-net
+    deploy:
+      replicas: 3
+
+networks:
+  mctl-net:
+    driver: bridge

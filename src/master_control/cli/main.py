@@ -438,3 +438,105 @@ def shell(ctx: click.Context, name: str) -> None:
         [sys.executable, "-i", "-c", startup_code],
         env,
     )
+
+
+# --- Simulation ---
+
+
+@cli.group()
+def simulate() -> None:
+    """Manage a simulated multi-client fleet (requires Docker)."""
+
+
+@simulate.command("up")
+@click.option("--clients", default=3, help="Number of simulated client nodes")
+@click.option("--compose-file", default=None, type=click.Path(), help="Custom compose file")
+def simulate_up(clients: int, compose_file: str | None) -> None:
+    """Start the simulated fleet."""
+    from master_control.testing.simulation import DEFAULT_COMPOSE_FILE, SimulationManager
+
+    cf = Path(compose_file) if compose_file else DEFAULT_COMPOSE_FILE
+    mgr = SimulationManager(compose_file=cf)
+    try:
+        mgr.up(clients=clients)
+        console.print(
+            f"[green]Simulated fleet started with {clients} client(s).[/green]"
+        )
+    except Exception as e:
+        console.print(f"[red]Failed to start simulation: {e}[/red]")
+        raise SystemExit(1)
+
+
+@simulate.command("down")
+@click.option("--volumes", is_flag=True, help="Remove volumes too")
+@click.option("--compose-file", default=None, type=click.Path(), help="Custom compose file")
+def simulate_down(volumes: bool, compose_file: str | None) -> None:
+    """Tear down the simulated fleet."""
+    from master_control.testing.simulation import DEFAULT_COMPOSE_FILE, SimulationManager
+
+    cf = Path(compose_file) if compose_file else DEFAULT_COMPOSE_FILE
+    mgr = SimulationManager(compose_file=cf)
+    try:
+        mgr.down(volumes=volumes)
+        console.print("[green]Simulated fleet stopped.[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to stop simulation: {e}[/red]")
+        raise SystemExit(1)
+
+
+@simulate.command("status")
+@click.option("--compose-file", default=None, type=click.Path(), help="Custom compose file")
+def simulate_status(compose_file: str | None) -> None:
+    """Show status of simulated fleet containers."""
+    from master_control.testing.simulation import DEFAULT_COMPOSE_FILE, SimulationManager
+
+    cf = Path(compose_file) if compose_file else DEFAULT_COMPOSE_FILE
+    mgr = SimulationManager(compose_file=cf)
+    output = mgr.status()
+    if output.strip():
+        console.print(output)
+    else:
+        console.print("[dim]No simulation containers running.[/dim]")
+
+
+@simulate.command("logs")
+@click.option("--service", default=None, help="Service name (central or client)")
+@click.option("--tail", "tail_lines", default=50, help="Number of lines to show")
+@click.option("--compose-file", default=None, type=click.Path(), help="Custom compose file")
+def simulate_logs(service: str | None, tail_lines: int, compose_file: str | None) -> None:
+    """Show logs from the simulated fleet."""
+    from master_control.testing.simulation import DEFAULT_COMPOSE_FILE, SimulationManager
+
+    cf = Path(compose_file) if compose_file else DEFAULT_COMPOSE_FILE
+    mgr = SimulationManager(compose_file=cf)
+    output = mgr.logs(service=service, tail=tail_lines)
+    if output.strip():
+        console.print(output)
+    else:
+        console.print("[dim]No logs available.[/dim]")
+
+
+@simulate.command("chaos")
+@click.option(
+    "--scenario",
+    default="random",
+    type=click.Choice(["random", "cascade", "disk_pressure"]),
+    help="Chaos scenario to run",
+)
+def simulate_chaos(scenario: str) -> None:
+    """Run a chaos experiment against the simulated fleet."""
+    from master_control.testing.chaos import ChaosRunner
+
+    runner = ChaosRunner()
+    results = runner.run_scenario(scenario)
+
+    for result in results:
+        if "error" in result:
+            console.print(f"[red]{result['error']}[/red]")
+        else:
+            action = result.get("action", "unknown")
+            container = result.get("container", "?")
+            console.print(f"[yellow]Chaos:[/yellow] {action} on {container}")
+            for k, v in result.items():
+                if k not in ("action", "container"):
+                    console.print(f"  {k}: {v}")

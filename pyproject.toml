@@ -33,6 +33,9 @@ api = [
     "psutil>=6.0",
     "zeroconf>=0.136",
 ]
+sim = [
+    "docker>=7.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.10.0,<0.11.0"]

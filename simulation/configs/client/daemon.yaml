@@ -1,0 +1,6 @@
+fleet:
+  enabled: true
+  client_name: "{{ env.HOSTNAME }}"
+  api_port: 9100
+  central_api_url: "{{ env.MCTL_CENTRAL_URL }}"
+  heartbeat_interval_seconds: 10.0
