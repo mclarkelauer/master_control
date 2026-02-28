@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from master_control.api.models import (
     ClientOverview,
-    CommandResponse,
     DeploymentClientStatus,
     DeploymentRequest,
     DeploymentStatus,

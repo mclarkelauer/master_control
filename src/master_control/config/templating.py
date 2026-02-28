@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from jinja2 import Environment, StrictUndefined, TemplateSyntaxError, UndefinedError
+from jinja2 import Environment, StrictUndefined
 
 
 def render_template(raw_text: str, context: dict[str, Any] | None = None) -> str:

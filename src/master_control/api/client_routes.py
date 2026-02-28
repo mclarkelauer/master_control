@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, Query
 
-from master_control.api.models import CommandResponse, WorkloadInfo
+from master_control.api.models import CommandResponse
 
 if TYPE_CHECKING:
     from master_control.engine.orchestrator import Orchestrator

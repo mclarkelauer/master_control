@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -12,7 +12,6 @@ from master_control.api.models import (
     ClientOverview,
     DeploymentClientStatus,
     DeploymentRequest,
-    SystemMetrics,
 )
 from master_control.fleet.deployer import RollingDeployer
 
@@ -118,7 +117,7 @@ class TestStartDeployment:
             proc.returncode = 0
             mock_proc.return_value = proc
 
-            dep_id = await deployer.start_deployment(request)
+            await deployer.start_deployment(request)
             await asyncio.sleep(0.05)
 
         # Should only include online clients (pi-1, pi-2), not offline pi-3

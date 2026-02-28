@@ -86,7 +86,7 @@ class ChaosRunner:
         cmd = [
             "docker", "exec", target,
             "dd", "if=/dev/zero", "of=/tmp/chaos_fill",
-            f"bs=1M", f"count={size_mb}",
+            "bs=1M", f"count={size_mb}",
         ]
         subprocess.run(cmd, capture_output=True, text=True)
         log.info("chaos.fill_disk", container=target, size_mb=size_mb)

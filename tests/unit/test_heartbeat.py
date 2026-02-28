@@ -6,9 +6,7 @@ import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
-import pytest
 
-from master_control.api.models import HeartbeatPayload
 from master_control.config.schema import FleetConfig
 from master_control.fleet.heartbeat import HeartbeatReporter
 from master_control.models.workload import (
